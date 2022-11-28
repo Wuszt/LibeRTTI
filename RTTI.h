@@ -1,3 +1,27 @@
+/**
+ * MIT License
+ *
+ * Copyright (c) 2022 Jakub Kuznik
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
 #pragma once
 
 namespace rtti
@@ -68,7 +92,7 @@ namespace rtti
 #define CREATE_DEFAULT_INTERNAL_true( ClassName ) return nullptr;
 #define CREATE_DEFAULT_INTERNAL_false( ClassName ) return new ClassName##();
 
-#define DECLARE_TYPE_INTERNAL_PARENT( ClassName, NamespaceParentClassName, ParentClassName, Inherits, Virtual, Abstract ) \
+#define DECLARE_CLASS_INTERNAL_PARENT( ClassName, NamespaceParentClassName, ParentClassName, Inherits, Virtual, Abstract ) \
 public: \
 class ClassName##Type : public NamespaceParentClassName##ParentClassName##Type \
 { \
@@ -135,39 +159,39 @@ protected: \
 private: \
 	static ClassName##Type s_typeInstance;
 
-#define DECLARE_TYPE_INTERNAL_PARENT_NAMESPACE_DIRECT( ClassName, NamespaceParentClassName, ParentClassName ) \
-DECLARE_TYPE_INTERNAL_PARENT( ClassName, NamespaceParentClassName##::##ParentClassName##::, ParentClassName, true, true, false ) \
+#define DECLARE_CLASS_INTERNAL_PARENT_NAMESPACE_DIRECT( ClassName, NamespaceParentClassName, ParentClassName ) \
+DECLARE_CLASS_INTERNAL_PARENT( ClassName, NamespaceParentClassName##::##ParentClassName##::, ParentClassName, true, true, false ) \
 	using Super = NamespaceParentClassName##::##ParentClassName;
 
-#define DECLARE_TYPE_INTERNAL( ClassName ) \
-DECLARE_TYPE_INTERNAL_PARENT( ClassName,, rtti::I, false, false, false)
+#define DECLARE_CLASS_INTERNAL( ClassName ) \
+DECLARE_CLASS_INTERNAL_PARENT( ClassName,, rtti::I, false, false, false)
 
-#define DECLARE_TYPE_INTERNAL_PARENT_DIRECT( ClassName, ParentClassName ) \
-DECLARE_TYPE_INTERNAL_PARENT( ClassName,, ParentClassName, true, true, false) \
+#define DECLARE_CLASS_INTERNAL_PARENT_DIRECT( ClassName, ParentClassName ) \
+DECLARE_CLASS_INTERNAL_PARENT( ClassName,, ParentClassName, true, true, false) \
 	using Super = ParentClassName;
 
 #define EXPAND( x ) x
 
-#define GET_DECLARE_TYPE_MACRO(_1,_2,_3,NAME,...) NAME
-#define DECLARE_TYPE(...) EXPAND(GET_DECLARE_TYPE_MACRO(__VA_ARGS__, DECLARE_TYPE_INTERNAL_PARENT_NAMESPACE_DIRECT, DECLARE_TYPE_INTERNAL_PARENT_DIRECT, DECLARE_TYPE_INTERNAL)(__VA_ARGS__))
+#define GET_DECLARE_CLASS_MACRO(_1,_2,_3,NAME,...) NAME
+#define DECLARE_CLASS(...) EXPAND(GET_DECLARE_CLASS_MACRO(__VA_ARGS__, DECLARE_CLASS_INTERNAL_PARENT_NAMESPACE_DIRECT, DECLARE_CLASS_INTERNAL_PARENT_DIRECT, DECLARE_CLASS_INTERNAL)(__VA_ARGS__))
 
-#define GET_DECLARE_TYPE_MACRO(_1,_2,_3,NAME,...) NAME
-#define DECLARE_STRUCT(...) EXPAND(GET_DECLARE_TYPE_MACRO(__VA_ARGS__, DECLARE_TYPE_INTERNAL_PARENT_NAMESPACE_DIRECT, DECLARE_TYPE_INTERNAL_PARENT_DIRECT, DECLARE_TYPE_INTERNAL)(__VA_ARGS__)) \
+#define GET_DECLARE_CLASS_MACRO(_1,_2,_3,NAME,...) NAME
+#define DECLARE_STRUCT(...) EXPAND(GET_DECLARE_CLASS_MACRO(__VA_ARGS__, DECLARE_CLASS_INTERNAL_PARENT_NAMESPACE_DIRECT, DECLARE_CLASS_INTERNAL_PARENT_DIRECT, DECLARE_CLASS_INTERNAL)(__VA_ARGS__)) \
 public:
 
 
 #define DECLARE_POLYMORPHIC_BASE_TYPE( ClassName ) \
-DECLARE_TYPE_INTERNAL_PARENT( ClassName,, rtti::I, false, true, false)
+DECLARE_CLASS_INTERNAL_PARENT( ClassName,, rtti::I, false, true, false)
 
 #define DECLARE_ABSTRACT_TYPE_INTERNAL( ClassName ) \
-DECLARE_TYPE_INTERNAL_PARENT( ClassName,, rtti::I, false, true, true)
+DECLARE_CLASS_INTERNAL_PARENT( ClassName,, rtti::I, false, true, true)
 
 #define DECLARE_ABSTRACT_TYPE_INTERNAL_PARENT_DIRECT( ClassName, ParentClassName ) \
-DECLARE_TYPE_INTERNAL_PARENT( ClassName,, ParentClassName, true, true, true) \
+DECLARE_CLASS_INTERNAL_PARENT( ClassName,, ParentClassName, true, true, true) \
 	using Super = ParentClassName;
 
 #define DECLARE_ABSTRACT_TYPE_INTERNAL_PARENT_NAMESPACE_DIRECT( ClassName, NamespaceParentClassName, ParentClassName ) \
-DECLARE_TYPE_INTERNAL_PARENT( ClassName, NamespaceParentClassName##::##ParentClassName##::, ParentClassName, true, true, true ) \
+DECLARE_CLASS_INTERNAL_PARENT( ClassName, NamespaceParentClassName##::##ParentClassName##::, ParentClassName, true, true, true ) \
 	using Super = NamespaceParentClassName##::##ParentClassName;
 
 #define GET_DECLARE_ABSTRACT_TYPE_MACRO( _1,_2,_3,NAME,... ) NAME
