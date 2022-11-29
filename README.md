@@ -3,10 +3,10 @@ Mini-RTTI is a small, header only way to provide type data for your classes and 
 
 # Usage
 First you have to put one of four macros in your class body
-* For regular classes use: `DECLARE_CLASS( <class_name>, <parent_namespaces> (optional), <parent_name> (optional) )`
-* If your class is abstract use: `DECLARE_ABSTRACT_CLASS( <class_name>, <parent_namespaces> (optional), <parent_name> (optional) )`
-* If your class is a polymorphic base for other class, but is not inheritting itself: `DECLARE_POLYMORPHIC_BASE_CLASS( <class_name> )`
-* For structs use `DECLARE_STRUCT( <struct_name>, <parent_namespaces> (optional), <parent_name> (optional) )`
+* For regular classes use: <br/> `DECLARE_CLASS( <class_name>, <parent_namespaces> (optional), <parent_name> (optional) )`
+* If your class is abstract use: <br/> `DECLARE_ABSTRACT_CLASS( <class_name>, <parent_namespaces> (optional), <parent_name> (optional) )`
+* If your class is a polymorphic base for other class, but is not inheritting itself: <br/> `DECLARE_POLYMORPHIC_BASE_CLASS( <class_name> )`
+* For structs use: <br/> `DECLARE_STRUCT( <struct_name>, <parent_namespaces> (optional), <parent_name> (optional) )`
 
 Then you need to put `IMPLEMENT_TYPE( <type_namespaces>(optional), <class_name> )` in your .cpp file.
 
