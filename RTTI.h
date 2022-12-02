@@ -72,6 +72,11 @@ namespace rtti
 			return false;
 		}
 
+		virtual Bool IsVirtual() const
+		{
+			return false;
+		}
+
 		Uint64 GetHash() const
 		{
 			return reinterpret_cast< Uint64 >(this);
@@ -116,8 +121,12 @@ public: \
 	{ \
 		return Abstract; \
 	} \
+	virtual Bool IsVirtual() const override \
+	{ \
+		return Virtual; \
+	} \
 protected: \
-	VIRTUAL_##Virtual ClassName##* CreateDefault_Internal() const \
+	virtual ClassName##* CreateDefault_Internal() const \
 	{ \
 		CREATE_DEFAULT_INTERNAL_##Abstract##( ClassName ) \
 	} \
@@ -159,29 +168,27 @@ protected: \
 private: \
 	static ClassName##Type s_typeInstance;
 
-#define DECLARE_TYPE_INTERNAL_PARENT_NAMESPACE_DIRECT( ClassName, NamespaceParentClassName, ParentClassName ) \
-DECLARE_TYPE_INTERNAL_PARENT( ClassName, NamespaceParentClassName##::##ParentClassName##::, ParentClassName, true, true, false ) \
+#define DECLARE_TYPE_INTERNAL_PARENT_NAMESPACE_DIRECT( ClassName, NamespaceParentClassName, ParentClassName, Virtual ) \
+DECLARE_TYPE_INTERNAL_PARENT( ClassName, NamespaceParentClassName##::##ParentClassName##::, ParentClassName, true, Virtual, false ) \
 	using Super = NamespaceParentClassName##::##ParentClassName;
 
-#define DECLARE_TYPE_INTERNAL( ClassName ) \
-DECLARE_TYPE_INTERNAL_PARENT( ClassName,, rtti::I, false, false, false)
+#define DECLARE_TYPE_INTERNAL( ClassName, Virtual ) \
+DECLARE_TYPE_INTERNAL_PARENT( ClassName,, rtti::I, false, Virtual, false)
 
-#define DECLARE_TYPE_INTERNAL_PARENT_DIRECT( ClassName, ParentClassName ) \
-DECLARE_TYPE_INTERNAL_PARENT( ClassName,, ParentClassName, true, true, false) \
+#define DECLARE_TYPE_INTERNAL_PARENT_DIRECT( ClassName, ParentClassName, Virtual ) \
+DECLARE_TYPE_INTERNAL_PARENT( ClassName,, ParentClassName, true, Virtual, false) \
 	using Super = ParentClassName;
 
 #define EXPAND( x ) x
 
 #define GET_DECLARE_TYPE_MACRO(_1,_2,_3,NAME,...) NAME
-#define DECLARE_CLASS(...) EXPAND(GET_DECLARE_TYPE_MACRO(__VA_ARGS__, DECLARE_TYPE_INTERNAL_PARENT_NAMESPACE_DIRECT, DECLARE_TYPE_INTERNAL_PARENT_DIRECT, DECLARE_TYPE_INTERNAL)(__VA_ARGS__))
 
-#define GET_DECLARE_TYPE_MACRO(_1,_2,_3,NAME,...) NAME
-#define DECLARE_STRUCT(...) EXPAND(GET_DECLARE_TYPE_MACRO(__VA_ARGS__, DECLARE_TYPE_INTERNAL_PARENT_NAMESPACE_DIRECT, DECLARE_TYPE_INTERNAL_PARENT_DIRECT, DECLARE_TYPE_INTERNAL)(__VA_ARGS__)) \
+#define DECLARE_POLYMORPHIC_CLASS(...) EXPAND(GET_DECLARE_TYPE_MACRO(__VA_ARGS__, DECLARE_TYPE_INTERNAL_PARENT_NAMESPACE_DIRECT, DECLARE_TYPE_INTERNAL_PARENT_DIRECT, DECLARE_TYPE_INTERNAL)(__VA_ARGS__, true))
+
+#define DECLARE_CLASS(...) EXPAND(GET_DECLARE_TYPE_MACRO(__VA_ARGS__, DECLARE_TYPE_INTERNAL_PARENT_NAMESPACE_DIRECT, DECLARE_TYPE_INTERNAL_PARENT_DIRECT, DECLARE_TYPE_INTERNAL)(__VA_ARGS__, false))
+
+#define DECLARE_STRUCT(...) EXPAND(GET_DECLARE_TYPE_MACRO(__VA_ARGS__, DECLARE_TYPE_INTERNAL_PARENT_NAMESPACE_DIRECT, DECLARE_TYPE_INTERNAL_PARENT_DIRECT, DECLARE_TYPE_INTERNAL)(__VA_ARGS__, false)) \
 public:
-
-
-#define DECLARE_POLYMORPHIC_BASE_CLASS( ClassName ) \
-DECLARE_TYPE_INTERNAL_PARENT( ClassName,, rtti::I, false, true, false)
 
 #define DECLARE_ABSTRACT_TYPE_INTERNAL( ClassName ) \
 DECLARE_TYPE_INTERNAL_PARENT( ClassName,, rtti::I, false, true, true)
