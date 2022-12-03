@@ -114,7 +114,7 @@ public: \
 	{ \
 		return rtti::IType::InheritsFrom< T >(); \
 	} \
-	std::unique_ptr<##ClassName##> CreateDefault() const \
+	std::unique_ptr< ClassName > CreateDefault() const \
 	{ \
 		return std::unique_ptr< ClassName >( CreateDefault_Internal() ); \
 	} \
