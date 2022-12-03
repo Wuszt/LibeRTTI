@@ -93,20 +93,21 @@ namespace rtti
 #define INHERITS_FROM_STATIC_BODY_true return Super::GetTypeStatic().IsA< T >() || Super::InheritsFromStatic< T >();
 #define INHERITS_FROM_STATIC_BODY_false return false;
 
+#define TYPE_CLASS_NAME_true Type
+#define TYPE_CLASS_NAME_false IType
 
 #define CREATE_DEFAULT_INTERNAL_true( ClassName ) return nullptr;
 #define CREATE_DEFAULT_INTERNAL_false( ClassName ) return new ClassName##();
 
-#define DECLARE_TYPE_INTERNAL_PARENT( ClassName, NamespaceParentClassName, ParentClassName, Inherits, Virtual, Abstract ) \
+#define DECLARE_TYPE_INTERNAL_PARENT( ClassName, ParentClassName, Inherits, Virtual, Abstract ) \
 public: \
-class ClassName##Type : public NamespaceParentClassName##ParentClassName##Type \
+class Type : public ParentClassName##::##TYPE_CLASS_NAME_##Inherits## \
 { \
 public: \
-	using BaseClassType = NamespaceParentClassName##ParentClassName##Type; \
 	virtual const char* GetName( Bool withNamespace ) const override; \
 	virtual Bool InheritsFrom( const rtti::IType& type ) const override \
 	{ \
-		INHERITS_FROM_BODY_##Inherits##( NamespaceParentClassName##ParentClassName ) \
+		INHERITS_FROM_BODY_##Inherits##( ParentClassName ) \
 	} \
 	template< class T > \
 	Bool InheritsFrom() const \
@@ -115,7 +116,7 @@ public: \
 	} \
 	std::unique_ptr<##ClassName##> CreateDefault() const \
 	{ \
-		return std::unique_ptr< ##ClassName## >( CreateDefault_Internal() ); \
+		return std::unique_ptr< ClassName >( CreateDefault_Internal() ); \
 	} \
 	virtual Bool IsAbstract() const override \
 	{ \
@@ -131,7 +132,7 @@ protected: \
 		CREATE_DEFAULT_INTERNAL_##Abstract##( ClassName ) \
 	} \
 }; \
-	static const ClassName##Type& GetTypeStatic() \
+	static const Type& GetTypeStatic() \
 	{ \
 		return s_typeInstance; \
 	} \
@@ -150,7 +151,7 @@ protected: \
 	{ \
 		return IsA< T >() || InheritsFrom< T >(); \
 	} \
-	VIRTUAL_##Virtual const ClassName##Type& GetType() const \
+	VIRTUAL_##Virtual const Type& GetType() const \
 	{ \
 		return s_typeInstance; \
 	} \
@@ -164,48 +165,40 @@ protected: \
 	{ \
 		INHERITS_FROM_STATIC_BODY_##Inherits; \
 	} \
-	using ClassType = ClassName##Type; \
+	using ClassType = Type; \
 private: \
-	static ClassName##Type s_typeInstance;
-
-#define DECLARE_TYPE_INTERNAL_PARENT_NAMESPACE_DIRECT( ClassName, NamespaceParentClassName, ParentClassName, Virtual ) \
-DECLARE_TYPE_INTERNAL_PARENT( ClassName, NamespaceParentClassName##::##ParentClassName##::, ParentClassName, true, Virtual, false ) \
-	using Super = NamespaceParentClassName##::##ParentClassName;
+	static Type s_typeInstance;
 
 #define DECLARE_TYPE_INTERNAL( ClassName, Virtual ) \
-DECLARE_TYPE_INTERNAL_PARENT( ClassName,, rtti::I, false, Virtual, false)
+DECLARE_TYPE_INTERNAL_PARENT( ClassName, rtti, false, Virtual, false)
 
 #define DECLARE_TYPE_INTERNAL_PARENT_DIRECT( ClassName, ParentClassName, Virtual ) \
-DECLARE_TYPE_INTERNAL_PARENT( ClassName,, ParentClassName, true, Virtual, false) \
+DECLARE_TYPE_INTERNAL_PARENT( ClassName, ParentClassName, true, Virtual, false) \
 	using Super = ParentClassName;
 
 #define EXPAND( x ) x
 
-#define GET_DECLARE_TYPE_MACRO(_1,_2,_3,NAME,...) NAME
+#define GET_DECLARE_TYPE_MACRO(_1,_2,NAME,...) NAME
 
-#define DECLARE_POLYMORPHIC_CLASS(...) EXPAND(GET_DECLARE_TYPE_MACRO(__VA_ARGS__, DECLARE_TYPE_INTERNAL_PARENT_NAMESPACE_DIRECT, DECLARE_TYPE_INTERNAL_PARENT_DIRECT, DECLARE_TYPE_INTERNAL)(__VA_ARGS__, true))
+#define DECLARE_POLYMORPHIC_CLASS(...) EXPAND(GET_DECLARE_TYPE_MACRO(__VA_ARGS__, DECLARE_TYPE_INTERNAL_PARENT_DIRECT, DECLARE_TYPE_INTERNAL)(__VA_ARGS__, true))
 
-#define DECLARE_CLASS(...) EXPAND(GET_DECLARE_TYPE_MACRO(__VA_ARGS__, DECLARE_TYPE_INTERNAL_PARENT_NAMESPACE_DIRECT, DECLARE_TYPE_INTERNAL_PARENT_DIRECT, DECLARE_TYPE_INTERNAL)(__VA_ARGS__, false))
+#define DECLARE_CLASS(...) EXPAND(GET_DECLARE_TYPE_MACRO(__VA_ARGS__, DECLARE_TYPE_INTERNAL_PARENT_DIRECT, DECLARE_TYPE_INTERNAL)(__VA_ARGS__, false))
 
-#define DECLARE_STRUCT(...) EXPAND(GET_DECLARE_TYPE_MACRO(__VA_ARGS__, DECLARE_TYPE_INTERNAL_PARENT_NAMESPACE_DIRECT, DECLARE_TYPE_INTERNAL_PARENT_DIRECT, DECLARE_TYPE_INTERNAL)(__VA_ARGS__, false)) \
+#define DECLARE_STRUCT(...) EXPAND(GET_DECLARE_TYPE_MACRO(__VA_ARGS__, DECLARE_TYPE_INTERNAL_PARENT_DIRECT, DECLARE_TYPE_INTERNAL)(__VA_ARGS__, false)) \
 public:
 
 #define DECLARE_ABSTRACT_TYPE_INTERNAL( ClassName ) \
-DECLARE_TYPE_INTERNAL_PARENT( ClassName,, rtti::I, false, true, true)
+DECLARE_TYPE_INTERNAL_PARENT( ClassName, rtti, false, true, true)
 
 #define DECLARE_ABSTRACT_TYPE_INTERNAL_PARENT_DIRECT( ClassName, ParentClassName ) \
-DECLARE_TYPE_INTERNAL_PARENT( ClassName,, ParentClassName, true, true, true) \
+DECLARE_TYPE_INTERNAL_PARENT( ClassName, ParentClassName, true, true, true) \
 	using Super = ParentClassName;
 
-#define DECLARE_ABSTRACT_TYPE_INTERNAL_PARENT_NAMESPACE_DIRECT( ClassName, NamespaceParentClassName, ParentClassName ) \
-DECLARE_TYPE_INTERNAL_PARENT( ClassName, NamespaceParentClassName##::##ParentClassName##::, ParentClassName, true, true, true ) \
-	using Super = NamespaceParentClassName##::##ParentClassName;
+#define GET_DECLARE_ABSTRACT_TYPE_MACRO( _1,_2,NAME,... ) NAME
+#define DECLARE_ABSTRACT_CLASS( ... ) EXPAND( GET_DECLARE_ABSTRACT_TYPE_MACRO( __VA_ARGS__, DECLARE_ABSTRACT_TYPE_INTERNAL_PARENT_DIRECT, DECLARE_ABSTRACT_TYPE_INTERNAL )( __VA_ARGS__ ) )
 
-#define GET_DECLARE_ABSTRACT_TYPE_MACRO( _1,_2,_3,NAME,... ) NAME
-#define DECLARE_ABSTRACT_CLASS( ... ) EXPAND( GET_DECLARE_ABSTRACT_TYPE_MACRO( __VA_ARGS__, DECLARE_ABSTRACT_TYPE_INTERNAL_PARENT_NAMESPACE_DIRECT, DECLARE_ABSTRACT_TYPE_INTERNAL_PARENT_DIRECT, DECLARE_ABSTRACT_TYPE_INTERNAL )( __VA_ARGS__ ) )
-
-#define IMPLEMENT_TYPE_INTERNAL( NamespaceClassName, ClassName ) NamespaceClassName##::##ClassName##Type NamespaceClassName##::s_typeInstance; \
-const char* NamespaceClassName##::##ClassName##Type::GetName( Bool withNamespace ) const \
+#define IMPLEMENT_TYPE_INTERNAL( NamespaceClassName, ClassName ) NamespaceClassName##::Type NamespaceClassName##::s_typeInstance; \
+const char* NamespaceClassName##::Type::GetName( Bool withNamespace ) const \
 { \
 	return withNamespace ? #NamespaceClassName : #ClassName; \
 }
