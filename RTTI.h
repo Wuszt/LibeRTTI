@@ -30,7 +30,7 @@ namespace rtti
 	{
 	public:
 		~IType() = default;
-		virtual const char* GetName( Bool withNamespace ) const = 0;
+		virtual const char* GetName() const = 0;
 
 		Bool IsA( const IType& type ) const
 		{
@@ -104,7 +104,7 @@ public: \
 class Type : public ParentClassName##::##TYPE_CLASS_NAME_##Inherits## \
 { \
 public: \
-	virtual const char* GetName( Bool withNamespace ) const override; \
+	virtual const char* GetName() const override; \
 	virtual Bool InheritsFrom( const rtti::IType& type ) const override \
 	{ \
 		INHERITS_FROM_BODY_##Inherits##( ParentClassName ) \
@@ -194,17 +194,10 @@ DECLARE_TYPE_INTERNAL_PARENT( ClassName, rtti, false, true, true)
 DECLARE_TYPE_INTERNAL_PARENT( ClassName, ParentClassName, true, true, true) \
 	using Super = ParentClassName;
 
-#define GET_DECLARE_ABSTRACT_TYPE_MACRO( _1,_2,NAME,... ) NAME
-#define DECLARE_ABSTRACT_CLASS( ... ) EXPAND( GET_DECLARE_ABSTRACT_TYPE_MACRO( __VA_ARGS__, DECLARE_ABSTRACT_TYPE_INTERNAL_PARENT_DIRECT, DECLARE_ABSTRACT_TYPE_INTERNAL )( __VA_ARGS__ ) )
+#define DECLARE_ABSTRACT_CLASS( ... ) EXPAND( GET_DECLARE_TYPE_MACRO( __VA_ARGS__, DECLARE_ABSTRACT_TYPE_INTERNAL_PARENT_DIRECT, DECLARE_ABSTRACT_TYPE_INTERNAL )( __VA_ARGS__ ) )
 
-#define IMPLEMENT_TYPE_INTERNAL( NamespaceClassName, ClassName ) NamespaceClassName##::Type NamespaceClassName##::s_typeInstance; \
-const char* NamespaceClassName##::Type::GetName( Bool withNamespace ) const \
+#define IMPLEMENT_TYPE( NamespaceClassName ) NamespaceClassName##::Type NamespaceClassName##::s_typeInstance; \
+const char* NamespaceClassName##::Type::GetName() const \
 { \
-	return withNamespace ? #NamespaceClassName : #ClassName; \
+	return #NamespaceClassName; \
 }
-
-#define IMPLEMENT_TYPE_INTERNAL_1( _0, _1 ) IMPLEMENT_TYPE_INTERNAL( _0##::##_1, _1 )
-#define IMPLEMENT_TYPE_INTERNAL_0( _0 ) IMPLEMENT_TYPE_INTERNAL( _0,_0 )
-
-#define GET_IMPLEMENT_TYPE_MACRO( _1,_2,NAME,... ) NAME
-#define IMPLEMENT_TYPE( ... ) EXPAND( GET_IMPLEMENT_TYPE_MACRO( __VA_ARGS__, IMPLEMENT_TYPE_INTERNAL_1, IMPLEMENT_TYPE_INTERNAL_0 )( __VA_ARGS__ ) )
