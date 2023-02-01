@@ -49,6 +49,8 @@ Type classes are able to instantiate it's original classes instances in runtime.
 You can get the true type of your polymorphic class and get some additional information about it, compare it etc.
 Have a look on code examples to see what data about your type you can get.
 
+### Types register
+You have access to the list of all registered types.
 
 # Code Examples
 * Non-virtual classes
@@ -225,4 +227,9 @@ std::unique_ptr< C > c = cType->CreateDefault(); // c is instance of C
 
 baseType = &d::D::GetStaticType();
 std::unique_ptr< C > d = cType->CreateDefault(); // d is instance of D
+```
+
+* Types register
+``` cpp
+const auto& allTypes = rtti::RTTI::Get().GetTypes();
 ```
