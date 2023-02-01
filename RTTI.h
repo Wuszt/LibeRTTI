@@ -56,12 +56,6 @@ namespace rtti
 		std::vector< const IType* > m_types;
 	};
 
-	inline RTTI& GetRTTI()
-	{
-		static RTTI s_rtti;
-		return s_rtti;
-	}
-
 	class IType
 	{
 	public:
