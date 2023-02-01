@@ -26,10 +26,51 @@
 
 namespace rtti
 {
+	class RTTI
+	{
+	friend class IType;
+
+	public:
+		const std::vector< const IType* >& GetTypes() const
+		{
+			return m_types;
+		}
+
+		static const RTTI& Get()
+		{
+			return GetMutable();
+		}
+
+	private:
+		static RTTI& GetMutable()
+		{
+			static RTTI s_rtti;
+			return s_rtti;
+		}
+
+		void RegisterType( const IType& instance )
+		{
+			m_types.emplace_back( &instance );
+		}
+
+		std::vector< const IType* > m_types;
+	};
+
+	inline RTTI& GetRTTI()
+	{
+		static RTTI s_rtti;
+		return s_rtti;
+	}
+
 	class IType
 	{
 	public:
-		~IType() = default;
+		IType()
+		{
+			RTTI::GetMutable().RegisterType( *this );
+		}
+
+		virtual ~IType() = default;
 		virtual const char* GetName() const = 0;
 
 		Bool IsA( const IType& type ) const
