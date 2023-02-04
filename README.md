@@ -36,7 +36,7 @@ And that's it, you can now get some info about your type in the runtime.
 # What can I do with that?
 ### Hierarchy <br/>
 Every registered type gets it's unique nested type class, e.g if you have a `class A` then it's type class is will be `A::Type`. These type classes creates a hierarchy based on their original classes hierarchy. `rtti:IType` is the base class for all types classes.
-So for instance, if `class A : public B`, then `class A::Type : class B::Type`. Also, all type classes are virtual, even if their original classes are not. It allows you to take advantage of polymorphic features like having a parameter of type `const B::Type&` and passing later B's children types.
+So for instance, if `class A : public B`, then `class A::Type : class B::Type`. Also, all type classes are virtual, even if their original classes are not. It allows you to take advantage of polymorphic features like having a parameter of type `const B::Type&` and passing B's children types as arguments.
 
 ### Access parent class without literally typing it <br/>
 Very often you might need to invoke some parent class method, but C++ doesn't provide out of the box way to know what your parent is.
