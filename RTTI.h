@@ -164,7 +164,7 @@ public: \
 		return Virtual; \
 	} \
 protected: \
-	virtual ClassName##* CreateDefault_Internal() const \
+	VIRTUAL_##Virtual ClassName##* CreateDefault_Internal() const \
 	{ \
 		CREATE_DEFAULT_INTERNAL_##Abstract##( ClassName ) \
 	} \
@@ -221,7 +221,7 @@ DECLARE_TYPE_INTERNAL_PARENT( ClassName, ParentClassName, true, Virtual, false) 
 
 #define DECLARE_CLASS(...) EXPAND(GET_DECLARE_TYPE_MACRO(__VA_ARGS__, DECLARE_TYPE_INTERNAL_PARENT_DIRECT, DECLARE_TYPE_INTERNAL)(__VA_ARGS__, false))
 
-#define DECLARE_STRUCT(...) EXPAND(GET_DECLARE_TYPE_MACRO(__VA_ARGS__, DECLARE_TYPE_INTERNAL_PARENT_DIRECT, DECLARE_TYPE_INTERNAL)(__VA_ARGS__, false)) \
+#define DECLARE_STRUCT(...) DECLARE_CLASS(__VA_ARGS__) \
 public:
 
 #define DECLARE_ABSTRACT_TYPE_INTERNAL( ClassName ) \
