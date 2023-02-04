@@ -56,6 +56,8 @@ namespace rtti
 		std::vector< const IType* > m_types;
 	};
 
+	static auto Get = RTTI::Get;
+
 	class IType
 	{
 	public:
