@@ -231,5 +231,5 @@ std::unique_ptr< C > d = cType->CreateDefault(); // d is instance of D
 
 * Types register
 ``` cpp
-const auto& allTypes = rtti::RTTI::Get().GetTypes();
+const auto& allTypes = rtti::Get().GetTypes();
 ```
