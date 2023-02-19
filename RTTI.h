@@ -104,6 +104,9 @@ namespace rtti
 			return !IsA( rhl );
 		}
 
+		virtual void ConstructInPlace( void* dest ) const = 0;
+		virtual void Destroy( void* ptr ) const = 0;
+
 		virtual Bool IsAbstract() const
 		{
 			return false;
@@ -118,6 +121,8 @@ namespace rtti
 		{
 			return reinterpret_cast< Uint64 >(this);
 		}
+
+		virtual Uint32 GetSize() const = 0;
 	};
 }
 
@@ -133,8 +138,11 @@ namespace rtti
 #define TYPE_CLASS_NAME_true Type
 #define TYPE_CLASS_NAME_false IType
 
-#define CREATE_DEFAULT_INTERNAL_true( ClassName ) return nullptr;
-#define CREATE_DEFAULT_INTERNAL_false( ClassName ) return new ClassName##();
+#define CONSTRUCT_INTERNAL_true( ClassName ) return nullptr;
+#define CONSTRUCT_INTERNAL_false( ClassName ) return new ClassName##();
+
+#define CONSTRUCT_IN_PLACE_INTERNAL_true( ClassName, dest )
+#define CONSTRUCT_IN_PLACE_INTERNAL_false( ClassName, dest ) new (##dest##) ClassName##();
 
 #define DECLARE_TYPE_INTERNAL_PARENT( ClassName, ParentClassName, Inherits, Virtual, Abstract ) \
 public: \
@@ -151,9 +159,17 @@ public: \
 	{ \
 		return rtti::IType::InheritsFrom< T >(); \
 	} \
-	std::unique_ptr< ClassName > CreateDefault() const \
+	std::unique_ptr< ClassName > Construct() const \
 	{ \
-		return std::unique_ptr< ClassName >( CreateDefault_Internal() ); \
+		return std::unique_ptr< ClassName >( Construct_Internal() ); \
+	} \
+	virtual void ConstructInPlace( void* dest ) const override \
+	{ \
+		CONSTRUCT_IN_PLACE_INTERNAL_##Abstract##( ClassName, dest )\
+	} \
+	virtual void Destroy( void* ptr ) const override \
+	{ \
+		reinterpret_cast< ClassName##* >( ptr )->~##ClassName##(); \
 	} \
 	virtual Bool IsAbstract() const override \
 	{ \
@@ -163,10 +179,14 @@ public: \
 	{ \
 		return Virtual; \
 	} \
-protected: \
-	VIRTUAL_##Virtual ClassName##* CreateDefault_Internal() const \
+	virtual Uint32 GetSize() const override \
 	{ \
-		CREATE_DEFAULT_INTERNAL_##Abstract##( ClassName ) \
+		return sizeof( ClassName ); \
+	} \
+protected: \
+	VIRTUAL_##Virtual ClassName##* Construct_Internal() const \
+	{ \
+		CONSTRUCT_INTERNAL_##Abstract##( ClassName ) \
 	} \
 }; \
 	static const Type& GetTypeStatic() \
