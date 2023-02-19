@@ -223,10 +223,10 @@ b.InheritsFromOrIsA< C >(); // true
 const C::Type* baseType = nullptr;
 
 baseType = &C::GetStaticType();
-std::unique_ptr< C > c = cType->CreateDefault(); // c is instance of C
+std::unique_ptr< C > c = cType->Construct(); // c is instance of C
 
 baseType = &d::D::GetStaticType();
-std::unique_ptr< C > d = cType->CreateDefault(); // d is instance of D
+std::unique_ptr< C > d = cType->Construct(); // d is instance of D
 ```
 
 * Types register
