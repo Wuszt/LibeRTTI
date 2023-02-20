@@ -223,10 +223,14 @@ b.InheritsFromOrIsA< C >(); // true
 const C::Type* baseType = nullptr;
 
 baseType = &C::GetStaticType();
-std::unique_ptr< C > c = cType->Construct(); // c is instance of C
+std::unique_ptr< C > c = baseType->Construct(); // c is instance of C
 
 baseType = &d::D::GetStaticType();
-std::unique_ptr< C > d = cType->Construct(); // d is instance of D
+std::unique_ptr< C > d = baseType->Construct(); // d is instance of D
+
+void* buffer = new char[baseType->GetSize()]; // GetSize returns the size of the type
+baseType->ConstructInPlace( buffer ); // Constructs object in selected place
+baseType->Destroy( buffer ); // Destroys object in selected place
 ```
 
 * Types register
