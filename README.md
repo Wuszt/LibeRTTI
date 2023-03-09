@@ -45,6 +45,10 @@ In such cases you can use `Super` in your class which you likely know from other
 ### Instantiate class instance based on type class
 Type classes are able to instantiate it's original classes instances in runtime.
 
+### Move class instance
+You can invoke move constructor for some place in memory. Useful if you're working on raw memory and want to move class instance between buffers.
+This is an optional feature since it forces all classes to have move constructor. To enable it set `RTTI_REQUIRE_MOVE_CTOR` to `1`
+
 ### Recognizing object true type <br/>
 You can get the true type of your polymorphic class and get some additional information about it, compare it etc.
 Have a look on code examples to see what data about your type you can get.
@@ -220,9 +224,8 @@ b.InheritsFromOrIsA< C >(); // true
 
 * Instantiating class default object
 ``` cpp
-const C::Type* baseType = nullptr;
+const C::Type* baseType = &C::GetStaticType();
 
-baseType = &C::GetStaticType();
 std::unique_ptr< C > c = baseType->Construct(); // c is instance of C
 
 baseType = &d::D::GetStaticType();
@@ -231,6 +234,21 @@ std::unique_ptr< C > d = baseType->Construct(); // d is instance of D
 void* buffer = new char[baseType->GetSize()]; // GetSize returns the size of the type
 baseType->ConstructInPlace( buffer ); // Constructs object in selected place
 baseType->Destroy( buffer ); // Destroys object in selected place
+```
+
+* Moving class instance between buffers (optional feature)
+``` cpp
+#define RTTI_REQUIRE_MOVE_CTOR 1
+
+const C::Type* baseType = &C::GetStaticType();
+
+void* buffer0 = new char[baseType->GetSize()]; // GetSize returns the size of the type
+void* buffer1 = new char[baseType->GetSize()]; // GetSize returns the size of the type
+baseType->ConstructInPlace( buffer0 ); // Constructs object in selected place
+baseType->MoveInPlace( buffer1, buffer0 ); // Moves object from buffer0 to buffer1
+
+baseType->Destroy( buffer0 ); // Destroys object in selected place
+baseType->Destroy( buffer1 ); // Destroys object in selected place
 ```
 
 * Types register
