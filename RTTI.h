@@ -24,6 +24,8 @@
 
 #pragma once
 
+#define RTTI_REQUIRE_MOVE_CTOR 0
+
 namespace rtti
 {
 	class RTTI
@@ -105,6 +107,10 @@ namespace rtti
 		}
 
 		virtual void ConstructInPlace( void* dest ) const = 0;
+
+#if RTTI_REQUIRE_MOVE_CTOR
+		virtual void MoveInPlace( void* dest, void* src ) const = 0;
+#endif
 		virtual void Destroy( void* ptr ) const = 0;
 
 		virtual Bool IsAbstract() const
@@ -138,11 +144,19 @@ namespace rtti
 #define TYPE_CLASS_NAME_true Type
 #define TYPE_CLASS_NAME_false IType
 
-#define CONSTRUCT_INTERNAL_true( ClassName ) return nullptr;
-#define CONSTRUCT_INTERNAL_false( ClassName ) return new ClassName##();
+#define CONSTRUCT_INTERNAL_BODY_true( ClassName ) return nullptr;
+#define CONSTRUCT_INTERNAL_BODY_false( ClassName ) return new ClassName##();
 
-#define CONSTRUCT_IN_PLACE_INTERNAL_true( ClassName, dest )
-#define CONSTRUCT_IN_PLACE_INTERNAL_false( ClassName, dest ) new (##dest##) ClassName##();
+#define CONSTRUCT_IN_PLACE_INTERNAL_BODY_true( ClassName, dest ) assert(true);
+#define CONSTRUCT_IN_PLACE_INTERNAL_BODY_false( ClassName, dest ) new (##dest##) ClassName##();
+
+#if RTTI_REQUIRE_MOVE_CTOR
+	#define MOVE_IN_PLACE_INTERNAL_true( ClassName ) virtual void MoveInPlace( void* dest, void* src  ) const override { assert( true ); }
+	#define MOVE_IN_PLACE_INTERNAL_false( ClassName ) virtual void MoveInPlace( void* dest, void* src ) const override { new (dest) ClassName##(std::move( *static_cast< ClassName##* >( src ) ) ); }
+#else
+	#define MOVE_IN_PLACE_INTERNAL_true( ClassName )
+	#define MOVE_IN_PLACE_INTERNAL_false( ClassName )
+#endif
 
 #define DECLARE_TYPE_INTERNAL_PARENT( ClassName, ParentClassName, Inherits, Virtual, Abstract ) \
 public: \
@@ -165,11 +179,12 @@ public: \
 	} \
 	virtual void ConstructInPlace( void* dest ) const override \
 	{ \
-		CONSTRUCT_IN_PLACE_INTERNAL_##Abstract##( ClassName, dest )\
+		CONSTRUCT_IN_PLACE_INTERNAL_BODY_##Abstract##( ClassName, dest )\
 	} \
+	MOVE_IN_PLACE_INTERNAL_##Abstract##( ClassName ) \
 	virtual void Destroy( void* ptr ) const override \
 	{ \
-		reinterpret_cast< ClassName##* >( ptr )->~##ClassName##(); \
+		static_cast< ClassName##* >( ptr )->~##ClassName##(); \
 	} \
 	virtual Bool IsAbstract() const override \
 	{ \
@@ -186,7 +201,7 @@ public: \
 protected: \
 	VIRTUAL_##Virtual ClassName##* Construct_Internal() const \
 	{ \
-		CONSTRUCT_INTERNAL_##Abstract##( ClassName ) \
+		CONSTRUCT_INTERNAL_BODY_##Abstract##( ClassName ) \
 	} \
 }; \
 	static const Type& GetTypeStatic() \
