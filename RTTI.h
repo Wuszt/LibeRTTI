@@ -24,7 +24,7 @@
 
 #pragma once
 
-#define RTTI_REQUIRE_MOVE_CTOR 0
+#define RTTI_REQUIRE_MOVE_CTOR 1
 
 namespace rtti
 {
