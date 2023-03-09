@@ -30,7 +30,8 @@ IMPLEMENT_TYPE( <class_name_with_namespace> )
 ```
 in your .cpp file.
 
-Your type is required to have trivial constructor! <br/>
+Your type is required to have default constructor! <br/>
+It's also required to have move constructor, but this is an optional feature which you can turn of switching `RTTI_REQUIRE_MOVE_CTOR` to `0` <br/>
 And that's it, you can now get some info about your type in the runtime.
 
 # What can I do with that?
