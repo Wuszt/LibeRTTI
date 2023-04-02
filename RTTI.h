@@ -147,11 +147,11 @@ namespace rtti
 #define CONSTRUCT_INTERNAL_BODY_true( ClassName ) return nullptr;
 #define CONSTRUCT_INTERNAL_BODY_false( ClassName ) return new ClassName##();
 
-#define CONSTRUCT_IN_PLACE_INTERNAL_BODY_true( ClassName, dest ) assert(true);
+#define CONSTRUCT_IN_PLACE_INTERNAL_BODY_true( ClassName, dest )
 #define CONSTRUCT_IN_PLACE_INTERNAL_BODY_false( ClassName, dest ) new (##dest##) ClassName##();
 
 #if RTTI_REQUIRE_MOVE_CTOR
-	#define MOVE_IN_PLACE_INTERNAL_true( ClassName ) virtual void MoveInPlace( void* dest, void* src  ) const override { assert( true ); }
+	#define MOVE_IN_PLACE_INTERNAL_true( ClassName ) virtual void MoveInPlace( void* dest, void* src  ) const override {}
 	#define MOVE_IN_PLACE_INTERNAL_false( ClassName ) virtual void MoveInPlace( void* dest, void* src ) const override { new (dest) ClassName##(std::move( *static_cast< ClassName##* >( src ) ) ); }
 #else
 	#define MOVE_IN_PLACE_INTERNAL_true( ClassName )
