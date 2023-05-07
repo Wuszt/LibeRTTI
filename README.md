@@ -1,5 +1,5 @@
 # Mini-RTTI
-Mini-RTTI is a small, header only way to provide type data for your classes and structs.
+Mini-RTTI is a small, includes free and header only way to provide type data for your classes and structs.
 
 # Usage
 First you have to put one of four macros in your class body
@@ -56,6 +56,13 @@ Have a look on code examples to see what data about your type you can get.
 
 ### Types register
 You have access to the list of all registered types.
+
+### Unique and persistent IDs
+All registered types get unique IDs which persist between executions until the name of the type changes. Might be used for serialization.
+
+# Primitive Types
+To get primitive's type use `rtti::PrimitiveType< <primitive_type_name> >::GetInstance()`.
+All primitive types are registered out of the box. However, if I skipped something, you can add new one by adding `DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( <primitive_type_name> )` to your header.
 
 # Code Examples
 * Non-virtual classes
@@ -255,4 +262,16 @@ baseType->Destroy( buffer1 ); // Destroys object in selected place
 * Types register
 ``` cpp
 const auto& allTypes = rtti::Get().GetTypes();
+```
+
+* Primitive types
+``` cpp
+const rtti::IType& floatType = ::rtti::PrimitiveType< float >::GetInstance();
+const rtti::IType& boolType = ::rtti::PrimitiveType< bool >::GetInstance();
+```
+
+* IDs
+``` cpp
+const rtti::IType& type = A::GetTypeStatic();
+size_t uniqueAndPersistentID = type.GetID();
 ```
