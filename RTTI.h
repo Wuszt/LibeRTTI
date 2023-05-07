@@ -63,11 +63,6 @@ namespace rtti
 	class IType
 	{
 	public:
-		IType()
-		{
-			RTTI::GetMutable().RegisterType( *this );
-		}
-
 		virtual ~IType() = default;
 		virtual const char* GetName() const = 0;
 
@@ -106,6 +101,11 @@ namespace rtti
 			return !IsA( rhl );
 		}
 
+		virtual bool IsPrimitive() const
+		{
+			return false;
+		}
+
 		virtual void ConstructInPlace( void* dest ) const = 0;
 
 #if RTTI_REQUIRE_MOVE_CTOR
@@ -125,10 +125,40 @@ namespace rtti
 
 		Uint64 GetHash() const
 		{
-			return reinterpret_cast< Uint64 >(this);
+			return reinterpret_cast< Uint64 >( this );
 		}
 
 		virtual Uint32 GetSize() const = 0;
+
+	protected:
+		IType()
+		{
+			RTTI::GetMutable().RegisterType( *this );
+		}
+	};
+
+	template< class T >
+	class PrimitiveType : public IType
+	{
+	public:
+		virtual const char* GetName() const;
+		virtual Bool InheritsFrom( const IType& type ) const { return false; }
+		virtual void ConstructInPlace( void* dest ) const { *static_cast< T* >( dest ) = T(); }
+#if RTTI_REQUIRE_MOVE_CTOR
+		virtual void MoveInPlace( void* dest, void* src ) const { std::memcpy( dest, src, sizeof( T ) ); }
+#endif
+		virtual void Destroy( void* ptr ) const {}
+		virtual Uint32 GetSize() const { return sizeof( T ); }
+		virtual bool IsPrimitive() const { return true; }
+
+		static const rtti::PrimitiveType< T >& GetInstance()
+		{
+			static rtti::PrimitiveType< T > s_typeInstance;
+			return s_typeInstance;
+		}
+
+	private:
+		PrimitiveType< T >() = default;
 	};
 }
 
@@ -164,14 +194,14 @@ class Type : public ParentClassName##::##TYPE_CLASS_NAME_##Inherits## \
 { \
 public: \
 	virtual const char* GetName() const override; \
-	virtual Bool InheritsFrom( const rtti::IType& type ) const override \
+	virtual Bool InheritsFrom( const ::rtti::IType& type ) const override \
 	{ \
 		INHERITS_FROM_BODY_##Inherits##( ParentClassName ) \
 	} \
 	template< class T > \
 	Bool InheritsFrom() const \
 	{ \
-		return rtti::IType::InheritsFrom< T >(); \
+		return ::rtti::IType::InheritsFrom< T >(); \
 	} \
 	std::unique_ptr< ClassName > Construct() const \
 	{ \
@@ -198,25 +228,31 @@ public: \
 	{ \
 		return sizeof( ClassName ); \
 	} \
+	static const Type& GetInstance() \
+	{ \
+		static Type s_typeInstance; \
+		return s_typeInstance; \
+	} \
 protected: \
 	VIRTUAL_##Virtual ClassName##* Construct_Internal() const \
 	{ \
 		CONSTRUCT_INTERNAL_BODY_##Abstract##( ClassName ) \
 	} \
+	Type() = default; \
 }; \
 	static const Type& GetTypeStatic() \
 	{ \
-		return s_typeInstance; \
+		return Type::GetInstance(); \
 	} \
 	template< class T > \
 	Bool IsA() const \
 	{ \
-		return static_cast<const rtti::IType&>( GetType() ).IsA< T >(); \
+		return static_cast<const ::rtti::IType&>( GetType() ).IsA< T >(); \
 	} \
 	template< class T > \
 	Bool InheritsFrom() const \
 	{ \
-		return static_cast<const rtti::IType&>( GetType() ).InheritsFrom< T >(); \
+		return static_cast<const ::rtti::IType&>( GetType() ).InheritsFrom< T >(); \
 	} \
 	template< class T > \
 	Bool InheritsFromOrIsA() const \
@@ -225,7 +261,7 @@ protected: \
 	} \
 	VIRTUAL_##Virtual const Type& GetType() const \
 	{ \
-		return s_typeInstance; \
+		return GetTypeStatic(); \
 	} \
 	template< class T > \
 	static Bool InheritsFromOrIsAStatic() \
@@ -239,10 +275,9 @@ protected: \
 	} \
 	using ClassType = Type; \
 private: \
-	static Type s_typeInstance;
 
 #define DECLARE_TYPE_INTERNAL( ClassName, Virtual ) \
-DECLARE_TYPE_INTERNAL_PARENT( ClassName, rtti, false, Virtual, false)
+DECLARE_TYPE_INTERNAL_PARENT( ClassName, ::rtti, false, Virtual, false)
 
 #define DECLARE_TYPE_INTERNAL_PARENT_DIRECT( ClassName, ParentClassName, Virtual ) \
 DECLARE_TYPE_INTERNAL_PARENT( ClassName, ParentClassName, true, Virtual, false) \
@@ -260,7 +295,7 @@ DECLARE_TYPE_INTERNAL_PARENT( ClassName, ParentClassName, true, Virtual, false) 
 public:
 
 #define DECLARE_ABSTRACT_TYPE_INTERNAL( ClassName ) \
-DECLARE_TYPE_INTERNAL_PARENT( ClassName, rtti, false, true, true)
+DECLARE_TYPE_INTERNAL_PARENT( ClassName, ::rtti, false, true, true)
 
 #define DECLARE_ABSTRACT_TYPE_INTERNAL_PARENT_DIRECT( ClassName, ParentClassName ) \
 DECLARE_TYPE_INTERNAL_PARENT( ClassName, ParentClassName, true, true, true) \
@@ -268,8 +303,41 @@ DECLARE_TYPE_INTERNAL_PARENT( ClassName, ParentClassName, true, true, true) \
 
 #define DECLARE_ABSTRACT_CLASS( ... ) EXPAND( GET_DECLARE_TYPE_MACRO( __VA_ARGS__, DECLARE_ABSTRACT_TYPE_INTERNAL_PARENT_DIRECT, DECLARE_ABSTRACT_TYPE_INTERNAL )( __VA_ARGS__ ) )
 
-#define IMPLEMENT_TYPE( NamespaceClassName ) NamespaceClassName##::Type NamespaceClassName##::s_typeInstance; \
+#define CONCAT(X, Y) CONCAT2(X, Y)
+#define CONCAT2(X,Y) X##Y
+
+#define CREATE_TYPE_INSTANCE( TypeClass ) \
+namespace rtti_internal \
+{ \
+static const void* CONCAT( s_typeInstance_, __COUNTER__ ) = &TypeClass::GetInstance(); \
+}
+
+#define IMPLEMENT_TYPE( NamespaceClassName ) \
 const char* NamespaceClassName##::Type::GetName() const \
 { \
 	return #NamespaceClassName; \
-}
+} \
+CREATE_TYPE_INSTANCE( NamespaceClassName##::Type )
+
+#define DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( type ) \
+template<> \
+inline const char* ::rtti::PrimitiveType< type >::GetName() const \
+{ \
+	return #type; \
+} \
+template<> \
+inline Bool rtti::IType::IsA< type >() const \
+{ \
+	return IsA( ::rtti::PrimitiveType< type >::GetInstance() ); \
+} \
+CREATE_TYPE_INSTANCE( ::rtti::PrimitiveType<##type##> )
+
+DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( float )
+DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( __int32 )
+DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( __int64 )
+DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( bool )
+DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( unsigned short )
+DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( unsigned )
+DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( unsigned long long )
+DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( double )
+DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( __int8 )
