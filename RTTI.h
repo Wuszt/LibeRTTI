@@ -42,7 +42,6 @@ namespace rtti
 		{
 			return GetMutable();
 		}
-
 	private:
 		static RTTI& GetMutable()
 		{
@@ -50,8 +49,16 @@ namespace rtti
 			return s_rtti;
 		}
 
+		bool IsTypeRegistered( const IType& testType );
+
 		void RegisterType( const IType& instance )
 		{
+			if ( IsTypeRegistered( instance ) )
+			{
+				// Your types have to be unique! You probably declared 2 classes with the same name in 2 different TUs.
+				throw;
+			}
+
 			m_types.emplace_back( &instance );
 		}
 
@@ -66,37 +73,37 @@ namespace rtti
 		virtual ~IType() = default;
 		virtual const char* GetName() const = 0;
 
-		Bool IsA( const IType& type ) const
+		bool IsA( const IType& type ) const
 		{
-			return this == &type;
+			return GetID() == type.GetID();
 		}
 
 		template< class T >
-		Bool IsA() const
+		bool IsA() const
 		{
 			return IsA( T::GetTypeStatic() );
 		}
 
-		virtual Bool InheritsFrom( const IType& type ) const = 0;
+		virtual bool InheritsFrom( const IType& type ) const = 0;
 
 		template< class T >
-		Bool InheritsFrom() const
+		bool InheritsFrom() const
 		{
 			return InheritsFrom( T::GetTypeStatic() );
 		}
 
 		template< class T >
-		static Bool InheritsFromStatic()
+		static bool InheritsFromStatic()
 		{
 			return false;
 		}
 
-		Bool operator==( const IType& rhl ) const
+		bool operator==( const IType& rhl ) const
 		{
 			return IsA( rhl );
 		}
 
-		Bool operator!=( const IType& rhl ) const
+		bool operator!=( const IType& rhl ) const
 		{
 			return !IsA( rhl );
 		}
@@ -113,42 +120,72 @@ namespace rtti
 #endif
 		virtual void Destroy( void* ptr ) const = 0;
 
-		virtual Bool IsAbstract() const
+		virtual bool IsAbstract() const
 		{
 			return false;
 		}
 
-		virtual Bool IsVirtual() const
+		virtual bool IsVirtual() const
 		{
 			return false;
 		}
 
-		Uint64 GetHash() const
+		size_t GetID() const
 		{
-			return reinterpret_cast< Uint64 >( this );
+			return m_id;
 		}
 
-		virtual Uint32 GetSize() const = 0;
+		virtual size_t GetSize() const = 0;
 
 	protected:
-		IType()
+		IType( const char* name )
+			: m_id( CalcHash( name ) )
 		{
 			RTTI::GetMutable().RegisterType( *this );
 		}
+
+	private:
+		// Java's hashCode for String
+		static size_t CalcHash( const char* name )
+		{
+			size_t result = 0;
+
+			for( Uint32 i = 0u; name[ i ] != 0; ++i )
+			{
+				result = name[ i ] + result * 31;
+			}
+
+			return result;
+		}
+
+		size_t m_id = 0u;
 	};
+
+	inline bool RTTI::IsTypeRegistered( const IType& testType )
+	{
+		for ( const IType* type : m_types )
+		{
+			if ( *type == testType )
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
 
 	template< class T >
 	class PrimitiveType : public IType
 	{
 	public:
 		virtual const char* GetName() const;
-		virtual Bool InheritsFrom( const IType& type ) const { return false; }
+		virtual bool InheritsFrom( const IType& type ) const { return false; }
 		virtual void ConstructInPlace( void* dest ) const { *static_cast< T* >( dest ) = T(); }
 #if RTTI_REQUIRE_MOVE_CTOR
 		virtual void MoveInPlace( void* dest, void* src ) const { std::memcpy( dest, src, sizeof( T ) ); }
 #endif
 		virtual void Destroy( void* ptr ) const {}
-		virtual Uint32 GetSize() const { return sizeof( T ); }
+		virtual size_t GetSize() const { return sizeof( T ); }
 		virtual bool IsPrimitive() const { return true; }
 
 		static const rtti::PrimitiveType< T >& GetInstance()
@@ -158,7 +195,7 @@ namespace rtti
 		}
 
 	private:
-		PrimitiveType< T >() = default;
+		PrimitiveType< T >() : rtti::IType( GetName() ) {}
 	};
 }
 
@@ -194,12 +231,12 @@ class Type : public ParentClassName##::##TYPE_CLASS_NAME_##Inherits## \
 { \
 public: \
 	virtual const char* GetName() const override; \
-	virtual Bool InheritsFrom( const ::rtti::IType& type ) const override \
+	virtual bool InheritsFrom( const ::rtti::IType& type ) const override \
 	{ \
 		INHERITS_FROM_BODY_##Inherits##( ParentClassName ) \
 	} \
 	template< class T > \
-	Bool InheritsFrom() const \
+	bool InheritsFrom() const \
 	{ \
 		return ::rtti::IType::InheritsFrom< T >(); \
 	} \
@@ -216,15 +253,15 @@ public: \
 	{ \
 		static_cast< ClassName##* >( ptr )->~##ClassName##(); \
 	} \
-	virtual Bool IsAbstract() const override \
+	virtual bool IsAbstract() const override \
 	{ \
 		return Abstract; \
 	} \
-	virtual Bool IsVirtual() const override \
+	virtual bool IsVirtual() const override \
 	{ \
 		return Virtual; \
 	} \
-	virtual Uint32 GetSize() const override \
+	virtual size_t GetSize() const override \
 	{ \
 		return sizeof( ClassName ); \
 	} \
@@ -238,24 +275,25 @@ protected: \
 	{ \
 		CONSTRUCT_INTERNAL_BODY_##Abstract##( ClassName ) \
 	} \
-	Type() = default; \
+	Type() : ParentClassName##::##TYPE_CLASS_NAME_##Inherits## ( GetName() ) {} \
+	Type( const char* name ) : ParentClassName##::##TYPE_CLASS_NAME_##Inherits## ( name ) {} \
 }; \
 	static const Type& GetTypeStatic() \
 	{ \
 		return Type::GetInstance(); \
 	} \
 	template< class T > \
-	Bool IsA() const \
+	bool IsA() const \
 	{ \
 		return static_cast<const ::rtti::IType&>( GetType() ).IsA< T >(); \
 	} \
 	template< class T > \
-	Bool InheritsFrom() const \
+	bool InheritsFrom() const \
 	{ \
 		return static_cast<const ::rtti::IType&>( GetType() ).InheritsFrom< T >(); \
 	} \
 	template< class T > \
-	Bool InheritsFromOrIsA() const \
+	bool InheritsFromOrIsA() const \
 	{ \
 		return IsA< T >() || InheritsFrom< T >(); \
 	} \
@@ -264,12 +302,12 @@ protected: \
 		return GetTypeStatic(); \
 	} \
 	template< class T > \
-	static Bool InheritsFromOrIsAStatic() \
+	static bool InheritsFromOrIsAStatic() \
 	{ \
 		return GetTypeStatic().IsA< T >() || InheritsFromStatic< T >(); \
 	} \
 	template< class T > \
-	static Bool InheritsFromStatic() \
+	static bool InheritsFromStatic() \
 	{ \
 		INHERITS_FROM_STATIC_BODY_##Inherits; \
 	} \
@@ -326,7 +364,7 @@ inline const char* ::rtti::PrimitiveType< type >::GetName() const \
 	return #type; \
 } \
 template<> \
-inline Bool rtti::IType::IsA< type >() const \
+inline bool rtti::IType::IsA< type >() const \
 { \
 	return IsA( ::rtti::PrimitiveType< type >::GetInstance() ); \
 } \
