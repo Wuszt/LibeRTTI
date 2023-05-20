@@ -26,9 +26,15 @@ DECLARE_STRUCT( <struct_name>, <parent_name_with_namespace> (optional) )
 Whatever your class is, eventually you need to put:
 
 ```cpp
-IMPLEMENT_TYPE( <class_name_with_namespace> )
+IMPLEMENT_TYPE( <class_name_with_namespace>, <properties_names>... (optional> )
 ```
 in your .cpp file.
+
+To register property of your type use:
+```cpp
+REGISTER_PROPERTY( <property_name> )
+```
+and put in in `IMPLEMENT_TYPE` macro.
 
 Your type is required to have default constructor! <br/>
 It's also required to have move constructor, but this is an optional feature which you can turn of switching `RTTI_REQUIRE_MOVE_CTOR` to `0` <br/>
@@ -36,7 +42,7 @@ And that's it, you can now get some info about your type in the runtime.
 
 # What can I do with that?
 ### Hierarchy <br/>
-Every registered type gets it's unique nested type class, e.g if you have a `class A` then it's type class is will be `A::Type`. These type classes creates a hierarchy based on their original classes hierarchy. `rtti:IType` is the base class for all types classes.
+Every registered type gets it's unique nested type class, e.g if you have a `class A` then it's type class is will be `A::Type`. These type classes creates a hierarchy based on their original classes hierarchy. `rtti:Type` is the base class for all types classes.
 So for instance, if `class A : public B`, then `class A::Type : class B::Type`. Also, all type classes are virtual, even if their original classes are not. It allows you to take advantage of polymorphic features like having a parameter of type `const B::Type&` and passing B's children types as arguments.
 
 ### Access parent class without literally typing it <br/>
@@ -58,11 +64,14 @@ Have a look on code examples to see what data about your type you can get.
 You have access to the list of all registered types.
 
 ### Unique and persistent IDs
-All registered types get unique IDs which persist between executions until the name of the type changes. Might be used for serialization.
+All registered types and their properties get unique IDs which persist between executions until the name of the type/property changes. Might be used for serialization.
 
 # Primitive Types
 To get primitive's type use `rtti::PrimitiveType< <primitive_type_name> >::GetInstance()`.
 All primitive types are registered out of the box. However, if I skipped something, you can add new one by adding `DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( <primitive_type_name> )` to your header.
+
+# Properties
+You have a data about type's (and inherited from type's) selected variables called properties. Very useful in case you implement serialization or some UI.
 
 # Code Examples
 * Non-virtual classes
@@ -164,6 +173,24 @@ IMPLEMENT_TYPE( B );
 IMPLEMENT_TYPE( c::C );
 IMPLEMENT_TYPE( D );
 ```
+* Properties registration
+```cpp
+// .h
+struct StructWithProperties
+{
+  DECLARE_STRUCT( StructWithProperties );
+  TestFoo m_firstVar; // TestFoo has to be registered type if you want to register it as a property!
+  float m_secondVar;
+  bool m_anotherVar;
+};
+
+// .cpp
+IMPLEMENT_TYPE( StructWithProperties,
+  REGISTER_PROPERTY( m_firstVar );
+  REGISTER_PROPERTY( m_secondVar );
+  REGISTER_PROPERTY( m_anotherVar );
+)
+```
 
 * Type information
 ```cpp
@@ -194,12 +221,12 @@ namespace d
 A* b = new b::B();
 C* d = new d::D();
 
-const rtti::IType& aType = A::GetTypeStatic();
-const rtti::IType& bType = b->GetType();
+const rtti::Type& aType = A::GetTypeStatic();
+const rtti::Type& bType = b->GetType();
 bType == aType; // true, because b is A* and both A and B are not virtual classes
 
-const rtti::IType& cType = C::GetTypeStatic();
-const rtti::IType& dType = d->GetType();
+const rtti::Type& cType = C::GetTypeStatic();
+const rtti::Type& dType = d->GetType();
 cType == dType; // false, d is C*, but both C and D are virtual classes
 
 aType.GetName(); // "A"
@@ -266,12 +293,26 @@ const auto& allTypes = rtti::Get().GetTypes();
 
 * Primitive types
 ``` cpp
-const rtti::IType& floatType = ::rtti::PrimitiveType< float >::GetInstance();
-const rtti::IType& boolType = ::rtti::PrimitiveType< bool >::GetInstance();
+const rtti::Type& floatType = ::rtti::PrimitiveType< float >::GetInstance();
+const rtti::Type& boolType = ::rtti::PrimitiveType< bool >::GetInstance();
 ```
 
 * IDs
 ``` cpp
-const rtti::IType& type = A::GetTypeStatic();
+const rtti::Type& type = A::GetTypeStatic();
 size_t uniqueAndPersistentID = type.GetID();
+```
+
+* Properties
+``` cpp
+void* buff = new StructWithProperties();
+
+const rtti::Type& type = StructWithProperties::GetTypeStatic();
+const rtti::IProperty* foundProperty = type.FindProperty( "m_primitiveType" ); // Finding type's property
+const rtti::Property< Float >* floatProperty = foundProperty->Cast< Float >(); // Casting property to specific property type
+
+floatProperty->SetValue( buff, 321u ); // Set value using property
+float value = floatProperty->GetValue( buff ); // Get value using property
+
+delete buff;
 ```
