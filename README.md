@@ -1,5 +1,5 @@
 # Mini-RTTI
-Mini-RTTI is a small, includes free and header only way to provide type data for your classes and structs.
+Mini-RTTI is a small, header only library which provides type data for your classes and structs.
 
 # Usage
 First you have to put one of four macros in your class body
