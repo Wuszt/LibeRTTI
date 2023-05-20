@@ -23,6 +23,9 @@
  */
 
 #pragma once
+#include <vector>
+#include <memory>
+#include <type_traits>
 
 #define RTTI_REQUIRE_MOVE_CTOR 1
 
@@ -30,10 +33,10 @@ namespace rtti
 {
 	class RTTI
 	{
-	friend class IType;
+		friend class Type;
 
 	public:
-		const std::vector< const IType* >& GetTypes() const
+		const std::vector< const Type* >& GetTypes() const
 		{
 			return m_types;
 		}
@@ -49,9 +52,9 @@ namespace rtti
 			return s_rtti;
 		}
 
-		bool IsTypeRegistered( const IType& testType );
+		bool IsTypeRegistered( const Type& testType );
 
-		void RegisterType( const IType& instance )
+		void RegisterType( const Type& instance )
 		{
 			if ( IsTypeRegistered( instance ) )
 			{
@@ -62,18 +65,102 @@ namespace rtti
 			m_types.emplace_back( &instance );
 		}
 
-		std::vector< const IType* > m_types;
+		std::vector< const Type* > m_types;
 	};
 
 	static auto Get = RTTI::Get;
 
-	class IType
+	template< class >
+	class Property;
+
+	class IProperty
 	{
 	public:
-		virtual ~IType() = default;
+		virtual ~IProperty() = default;
+
+		virtual const char* GetName() const = 0;
+		virtual const Type& GetType() const = 0;
+		virtual size_t GetOffset() const = 0;
+		virtual size_t GetID() const = 0;
+
+		template< class T >
+		const Property< T >* Cast() const
+		{
+			return dynamic_cast< const Property< T >* >( this );
+		}
+	};
+
+	template< class T >
+	class Property : public IProperty
+	{
+		friend class Type;
+
+	public:
+		virtual const char* GetName() const override
+		{
+			return m_name;
+		}
+
+		virtual const Type& GetType() const override
+		{
+			return m_type;
+		}
+
+		virtual size_t GetOffset() const override
+		{
+			return m_offset;
+		}
+
+		virtual size_t GetID() const override 
+		{
+			return m_id;
+		}
+
+		void* GetAddress( void* owner ) const
+		{
+			return static_cast< char* >( owner ) + GetOffset();
+		}
+
+		T& GetValue( void* owner ) const
+		{
+			return *( static_cast< T* >( GetAddress( owner ) ) );
+		}
+
+		void SetValue( void* owner, const T& value ) const
+		{
+			 GetValue( owner ) = value;
+		}
+
+	private:
+		template< typename U = T, std::enable_if_t< !std::is_arithmetic_v< U >, bool > = true >
+		Property( const char* name, size_t offset, size_t id )
+			: m_name( name )
+			, m_type( T::Type::GetInstance() )
+			, m_offset( offset )
+			, m_id( id )
+		{}
+
+		template< typename U = T, std::enable_if_t< std::is_arithmetic_v< U >, bool > = true >
+		Property( const char* name, size_t offset, size_t id )
+			: m_name( name )
+			, m_type( PrimitiveType< T >::GetInstance() )
+			, m_offset( offset )
+			, m_id( id )
+		{}
+
+		size_t m_id = 0u;
+		const char* m_name = nullptr;
+		const Type& m_type;
+		size_t m_offset = 0u;
+	};
+
+	class Type
+	{
+	public:
+		virtual ~Type() = default;
 		virtual const char* GetName() const = 0;
 
-		bool IsA( const IType& type ) const
+		bool IsA( const Type& type ) const
 		{
 			return GetID() == type.GetID();
 		}
@@ -84,7 +171,7 @@ namespace rtti
 			return IsA( T::GetTypeStatic() );
 		}
 
-		virtual bool InheritsFrom( const IType& type ) const = 0;
+		virtual bool InheritsFrom( const Type& type ) const = 0;
 
 		template< class T >
 		bool InheritsFrom() const
@@ -98,12 +185,12 @@ namespace rtti
 			return false;
 		}
 
-		bool operator==( const IType& rhl ) const
+		bool operator==( const Type& rhl ) const
 		{
 			return IsA( rhl );
 		}
 
-		bool operator!=( const IType& rhl ) const
+		bool operator!=( const Type& rhl ) const
 		{
 			return !IsA( rhl );
 		}
@@ -137,20 +224,44 @@ namespace rtti
 
 		virtual size_t GetSize() const = 0;
 
+		virtual size_t GetPropertiesAmount() const { return 0u; }
+		virtual const IProperty* GetProperty( size_t index ) const { return nullptr; }
+
+		const IProperty* FindProperty( size_t wantedId ) const
+		{
+			for ( size_t i = 0u; i < GetPropertiesAmount(); ++i )
+			{
+				const IProperty* property = GetProperty( i );
+				if ( property->GetID() == wantedId )
+				{
+					return property;
+				}
+			}
+
+			return nullptr;
+		}
+
+		const IProperty* FindProperty( const char* name ) const
+		{
+			return FindProperty( CalcHash( name ) );
+		}
+
 	protected:
-		IType( const char* name )
+		Type( const char* name )
 			: m_id( CalcHash( name ) )
 		{
 			RTTI::GetMutable().RegisterType( *this );
 		}
 
-	private:
+		static size_t GetPropertiesAmountStatic() { return 0u; }
+		static const ::rtti::IProperty* GetPropertyStatic( size_t index ) { return nullptr; }
+
 		// Java's hashCode for String
 		static size_t CalcHash( const char* name )
 		{
-			size_t result = 0;
+			size_t result = 0u;
 
-			for( Uint32 i = 0u; name[ i ] != 0; ++i )
+			for ( size_t i = 0u; name[ i ] != 0; ++i )
 			{
 				result = name[ i ] + result * 31;
 			}
@@ -158,12 +269,19 @@ namespace rtti
 			return result;
 		}
 
+		template< class T >
+		static std::unique_ptr< ::rtti::IProperty > CreateProperty( const char* name, size_t offset )
+		{
+			return std::unique_ptr< ::rtti::Property< T > >( new ::rtti::Property< T >( name, offset, CalcHash( name ) ) );
+		}
+
+	private:
 		size_t m_id = 0u;
 	};
 
-	inline bool RTTI::IsTypeRegistered( const IType& testType )
+	inline bool RTTI::IsTypeRegistered( const Type& testType )
 	{
-		for ( const IType* type : m_types )
+		for ( const Type* type : m_types )
 		{
 			if ( *type == testType )
 			{
@@ -175,11 +293,13 @@ namespace rtti
 	}
 
 	template< class T >
-	class PrimitiveType : public IType
+	class PrimitiveType : public Type
 	{
+		static_assert( std::is_arithmetic_v< T >, "That's not a primitive type!" );
+
 	public:
 		virtual const char* GetName() const;
-		virtual bool InheritsFrom( const IType& type ) const { return false; }
+		virtual bool InheritsFrom( const Type& type ) const { return false; }
 		virtual void ConstructInPlace( void* dest ) const { *static_cast< T* >( dest ) = T(); }
 #if RTTI_REQUIRE_MOVE_CTOR
 		virtual void MoveInPlace( void* dest, void* src ) const { std::memcpy( dest, src, sizeof( T ) ); }
@@ -195,7 +315,7 @@ namespace rtti
 		}
 
 	private:
-		PrimitiveType< T >() : rtti::IType( GetName() ) {}
+		PrimitiveType< T >() : rtti::Type( GetName() ) {}
 	};
 }
 
@@ -208,9 +328,6 @@ namespace rtti
 #define INHERITS_FROM_STATIC_BODY_true return Super::GetTypeStatic().IsA< T >() || Super::InheritsFromStatic< T >();
 #define INHERITS_FROM_STATIC_BODY_false return false;
 
-#define TYPE_CLASS_NAME_true Type
-#define TYPE_CLASS_NAME_false IType
-
 #define CONSTRUCT_INTERNAL_BODY_true( ClassName ) return nullptr;
 #define CONSTRUCT_INTERNAL_BODY_false( ClassName ) return new ClassName##();
 
@@ -218,27 +335,27 @@ namespace rtti
 #define CONSTRUCT_IN_PLACE_INTERNAL_BODY_false( ClassName, dest ) new (##dest##) ClassName##();
 
 #if RTTI_REQUIRE_MOVE_CTOR
-	#define MOVE_IN_PLACE_INTERNAL_true( ClassName ) virtual void MoveInPlace( void* dest, void* src  ) const override {}
-	#define MOVE_IN_PLACE_INTERNAL_false( ClassName ) virtual void MoveInPlace( void* dest, void* src ) const override { new (dest) ClassName##(std::move( *static_cast< ClassName##* >( src ) ) ); }
+#define MOVE_IN_PLACE_INTERNAL_true( ClassName ) virtual void MoveInPlace( void* dest, void* src  ) const override {}
+#define MOVE_IN_PLACE_INTERNAL_false( ClassName ) virtual void MoveInPlace( void* dest, void* src ) const override { new (dest) ClassName##(std::move( *static_cast< ClassName##* >( src ) ) ); }
 #else
-	#define MOVE_IN_PLACE_INTERNAL_true( ClassName )
-	#define MOVE_IN_PLACE_INTERNAL_false( ClassName )
+#define MOVE_IN_PLACE_INTERNAL_true( ClassName )
+#define MOVE_IN_PLACE_INTERNAL_false( ClassName )
 #endif
 
 #define DECLARE_TYPE_INTERNAL_PARENT( ClassName, ParentClassName, Inherits, Virtual, Abstract ) \
 public: \
-class Type : public ParentClassName##::##TYPE_CLASS_NAME_##Inherits## \
+class Type : public ParentClassName##::Type \
 { \
 public: \
 	virtual const char* GetName() const override; \
-	virtual bool InheritsFrom( const ::rtti::IType& type ) const override \
+	virtual bool InheritsFrom( const ::rtti::Type& type ) const override \
 	{ \
 		INHERITS_FROM_BODY_##Inherits##( ParentClassName ) \
 	} \
 	template< class T > \
 	bool InheritsFrom() const \
 	{ \
-		return ::rtti::IType::InheritsFrom< T >(); \
+		return ::rtti::Type::InheritsFrom< T >(); \
 	} \
 	std::unique_ptr< ClassName > Construct() const \
 	{ \
@@ -270,13 +387,29 @@ public: \
 		static Type s_typeInstance; \
 		return s_typeInstance; \
 	} \
+	virtual size_t GetPropertiesAmount() const override { return ParentClassName##::Type::GetPropertiesAmountStatic() + m_properties.size(); } \
+	virtual const ::rtti::IProperty* GetProperty( size_t index ) const override \
+	{ \
+		if( index < ParentClassName##::Type::GetPropertiesAmountStatic() ) \
+		{ \
+			return ParentClassName##::Type::GetPropertyStatic( index ); \
+		} \
+		else \
+		{ \
+			return m_properties[ index - ParentClassName##::Type::GetPropertiesAmountStatic() ].get(); \
+		} \
+	} \
 protected: \
 	VIRTUAL_##Virtual ClassName##* Construct_Internal() const \
 	{ \
 		CONSTRUCT_INTERNAL_BODY_##Abstract##( ClassName ) \
 	} \
-	Type() : ParentClassName##::##TYPE_CLASS_NAME_##Inherits## ( GetName() ) {} \
-	Type( const char* name ) : ParentClassName##::##TYPE_CLASS_NAME_##Inherits## ( name ) {} \
+	Type(); \
+	Type( const char* name ) : ParentClassName##::Type ( name ) {} \
+	static size_t GetPropertiesAmountStatic() { return GetInstance().GetPropertiesAmount(); } \
+	static const ::rtti::IProperty* GetPropertyStatic( size_t index ) { return GetInstance().GetProperty( index ); } \
+private: \
+	std::vector< std::unique_ptr< ::rtti::IProperty > > m_properties; \
 }; \
 	static const Type& GetTypeStatic() \
 	{ \
@@ -285,12 +418,12 @@ protected: \
 	template< class T > \
 	bool IsA() const \
 	{ \
-		return static_cast<const ::rtti::IType&>( GetType() ).IsA< T >(); \
+		return static_cast<const ::rtti::Type&>( GetType() ).IsA< T >(); \
 	} \
 	template< class T > \
 	bool InheritsFrom() const \
 	{ \
-		return static_cast<const ::rtti::IType&>( GetType() ).InheritsFrom< T >(); \
+		return static_cast<const ::rtti::Type&>( GetType() ).InheritsFrom< T >(); \
 	} \
 	template< class T > \
 	bool InheritsFromOrIsA() const \
@@ -312,7 +445,7 @@ protected: \
 		INHERITS_FROM_STATIC_BODY_##Inherits; \
 	} \
 	using ClassType = Type; \
-private: \
+private:
 
 #define DECLARE_TYPE_INTERNAL( ClassName, Virtual ) \
 DECLARE_TYPE_INTERNAL_PARENT( ClassName, ::rtti, false, Virtual, false)
@@ -350,12 +483,19 @@ namespace rtti_internal \
 static const void* CONCAT( s_typeInstance_, __COUNTER__ ) = &TypeClass::GetInstance(); \
 }
 
-#define IMPLEMENT_TYPE( NamespaceClassName ) \
+#define IMPLEMENT_TYPE( NamespaceClassName, ... ) \
+NamespaceClassName##::Type::Type() : NamespaceClassName##::Type::Type( GetName() ) \
+{ \
+	using CurrentlyImplementedType = NamespaceClassName##; \
+	__VA_ARGS__ \
+} \
 const char* NamespaceClassName##::Type::GetName() const \
 { \
 	return #NamespaceClassName; \
 } \
 CREATE_TYPE_INSTANCE( NamespaceClassName##::Type )
+
+#define REGISTER_PROPERTY( PropertyName ) m_properties.emplace_back( CreateProperty< decltype( CurrentlyImplementedType::##PropertyName ) >( #PropertyName, offsetof( CurrentlyImplementedType, PropertyName ) ) );
 
 #define DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( type ) \
 template<> \
@@ -364,7 +504,7 @@ inline const char* ::rtti::PrimitiveType< type >::GetName() const \
 	return #type; \
 } \
 template<> \
-inline bool rtti::IType::IsA< type >() const \
+inline bool rtti::Type::IsA< type >() const \
 { \
 	return IsA( ::rtti::PrimitiveType< type >::GetInstance() ); \
 } \
