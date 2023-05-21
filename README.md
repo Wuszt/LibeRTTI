@@ -309,7 +309,7 @@ void* buff = new StructWithProperties();
 
 const rtti::Type& type = StructWithProperties::GetTypeStatic();
 const rtti::IProperty* foundProperty = type.FindProperty( "m_primitiveType" ); // Finding type's property
-const rtti::Property< Float >* floatProperty = foundProperty->Cast< Float >(); // Casting property to specific property type
+const rtti::Property< float >* floatProperty = foundProperty->Cast< float >(); // Casting property to specific property type
 
 floatProperty->SetValue( buff, 321u ); // Set value using property
 float value = floatProperty->GetValue( buff ); // Get value using property
