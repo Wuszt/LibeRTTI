@@ -132,18 +132,9 @@ namespace rtti
 		}
 
 	private:
-		template< typename U = T, std::enable_if_t< !std::is_arithmetic_v< U >, bool > = true >
 		Property( const char* name, size_t offset, size_t id )
 			: m_name( name )
-			, m_type( T::Type::GetInstance() )
-			, m_offset( offset )
-			, m_id( id )
-		{}
-
-		template< typename U = T, std::enable_if_t< std::is_arithmetic_v< U >, bool > = true >
-		Property( const char* name, size_t offset, size_t id )
-			: m_name( name )
-			, m_type( PrimitiveType< T >::GetInstance() )
+			, m_type( GetTypeOf< T >() )
 			, m_offset( offset )
 			, m_id( id )
 		{}
@@ -153,6 +144,18 @@ namespace rtti
 		const Type& m_type;
 		size_t m_offset = 0u;
 	};
+
+	template< typename T, std::enable_if_t< !std::is_arithmetic_v< T >, bool > = true >
+	const Type& GetTypeOf()
+	{
+		return T::Type::GetInstance();
+	}
+
+	template< typename T, std::enable_if_t< std::is_arithmetic_v< T >, bool > = true >
+	const Type& GetTypeOf()
+	{
+		return PrimitiveType< T >::GetInstance();
+	}
 
 	class Type
 	{
