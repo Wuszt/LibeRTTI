@@ -5,36 +5,36 @@ Mini-RTTI is a small, header only library which provides type data for your clas
 First you have to put one of four macros in your class body
 * For regular, non virtual classes use:
 ```cpp
-DECLARE_CLASS( <class_name>, <parent_name_with_namespace> (optional) )
+RTTI_DECLARE_CLASS( <class_name>, <parent_name_with_namespace> (optional) )
 ```
 
 * If your class is virtual:
 ```cpp
-DECLARE_POLYMORPHIC_CLASS( <class_name>, <parent_name_with_namespace> (optional) )
+RTTI_DECLARE_POLYMORPHIC_CLASS( <class_name>, <parent_name_with_namespace> (optional) )
 ```
 
 * If your class is abstract use:
 ```cpp
-DECLARE_ABSTRACT_CLASS( <class_name>, <parent_name_with_namespace> (optional) )
+RTTI_DECLARE_ABSTRACT_CLASS( <class_name>, <parent_name_with_namespace> (optional) )
 ```
 
 * For structs use:
 ```cpp
-DECLARE_STRUCT( <struct_name>, <parent_name_with_namespace> (optional) )
+RTTI_DECLARE_STRUCT( <struct_name>, <parent_name_with_namespace> (optional) )
 ```
 <br/>
 Whatever your class is, eventually you need to put:
 
 ```cpp
-IMPLEMENT_TYPE( <class_name_with_namespace>, <properties_names>... (optional> )
+RTTI_IMPLEMENT_TYPE( <class_name_with_namespace>, <properties_names>... (optional> )
 ```
 in your .cpp file.
 
 To register property of your type use:
 ```cpp
-REGISTER_PROPERTY( <property_name> )
+RTTI_REGISTER_PROPERTY( <property_name> )
 ```
-and put in in `IMPLEMENT_TYPE` macro.
+and put in in `RTTI_IMPLEMENT_TYPE` macro.
 
 Your type is required to have default constructor! <br/>
 It's also required to have move constructor, but this is an optional feature which you can turn of switching `RTTI_REQUIRE_MOVE_CTOR` to `0` <br/>
@@ -79,11 +79,11 @@ You have a data about type's (and inherited from type's) selected variables call
 // .h
 class A
 {
-  DECLARE_CLASS( A )
+  RTTI_DECLARE_CLASS( A )
 };
 
 // .cpp
-IMPLEMENT_TYPE( A )
+RTTI_IMPLEMENT_TYPE( A )
 ```
 
 * Virtual classes
@@ -91,12 +91,12 @@ IMPLEMENT_TYPE( A )
 // .h
 class A
 {
-  DECLARE_POLYMORPHIC_CLASS( A )
+  RTTI_DECLARE_POLYMORPHIC_CLASS( A )
   virtual ~A() = default;
 };
 
 // .cpp
-IMPLEMENT_TYPE( A )
+RTTI_IMPLEMENT_TYPE( A )
 ```
 
 * Structs
@@ -104,11 +104,11 @@ IMPLEMENT_TYPE( A )
 // .h
 struct A
 {
-  DECLARE_STRUCT( A )
+ RTTI_ DECLARE_STRUCT( A )
 };
 
 // .cpp
-IMPLEMENT_TYPE( A )
+RTTI_IMPLEMENT_TYPE( A )
 ```
 
 * Abstract class
@@ -116,13 +116,13 @@ IMPLEMENT_TYPE( A )
 // .h
 class I
 {
-DECLARE_ABSTRACT_CLASS( I );
+RTTI_DECLARE_ABSTRACT_CLASS( I );
 public:
     virtual ~I() = 0;
 }
 
 // .cpp
-IMPLEMENT_TYPE( I );
+RTTI_IMPLEMENT_TYPE( I );
 ```
 
 * Class in namespace
@@ -132,12 +132,12 @@ namespace a
 {
   class A
   {
-    DECLARE_CLASS( A )
+    RTTI_DECLARE_CLASS( A )
   };
 }
 
 // .cpp
-IMPLEMENT_TYPE( a::A )
+RTTI_IMPLEMENT_TYPE( a::A )
 ```
 
 * Inheritance
@@ -150,45 +150,45 @@ namespace a
 
 class B : public A
 {
-  DECLARE_CLASS( B, a::A )
+  RTTI_DECLARE_CLASS( B, a::A )
 }
 
 namespace c
 {
   class C : public B
   {
-    DECLARE_POLYMORPHIC_CLASS( C, B )
+    RTTI_DECLARE_POLYMORPHIC_CLASS( C, B )
     virtual ~C() = default;
   };
 }
 
 class D : public C
 {
-    DECLARE_POLYMORPHIC_CLASS( D, c::C )
+    RTTI_DECLARE_POLYMORPHIC_CLASS( D, c::C )
 }
 
 // .cpp
-IMPLEMENT_TYPE( a::A );
-IMPLEMENT_TYPE( B );
-IMPLEMENT_TYPE( c::C );
-IMPLEMENT_TYPE( D );
+RTTI_IMPLEMENT_TYPE( a::A );
+RTTI_IMPLEMENT_TYPE( B );
+RTTI_IMPLEMENT_TYPE( c::C );
+RTTI_IMPLEMENT_TYPE( D );
 ```
 * Properties registration
 ```cpp
 // .h
 struct StructWithProperties
 {
-  DECLARE_STRUCT( StructWithProperties );
+  RTTI_DECLARE_STRUCT( StructWithProperties );
   TestFoo m_firstVar; // TestFoo has to be registered type if you want to register it as a property!
   float m_secondVar;
   bool m_anotherVar;
 };
 
 // .cpp
-IMPLEMENT_TYPE( StructWithProperties,
-  REGISTER_PROPERTY( m_firstVar );
-  REGISTER_PROPERTY( m_secondVar );
-  REGISTER_PROPERTY( m_anotherVar );
+RTTI_IMPLEMENT_TYPE( StructWithProperties,
+  RTTI_REGISTER_PROPERTY( m_firstVar );
+  RTTI_REGISTER_PROPERTY( m_secondVar );
+  RTTI_REGISTER_PROPERTY( m_anotherVar );
 )
 ```
 
@@ -196,25 +196,25 @@ IMPLEMENT_TYPE( StructWithProperties,
 ```cpp
 class A
 {
-  DECLARE_CLASS( A )
+  RTTI_DECLARE_CLASS( A )
 };
 namespace b
 {
   class B : public A 
   {
-    DECLARE_CLASS( B, A )
+    RTTI_DECLARE_CLASS( B, A )
   };
 }
 
 class C
 {
-  DECLARE_POLYMORPHIC_CLASS( C )
+  RTTI_DECLARE_POLYMORPHIC_CLASS( C )
 };
 namespace d
 {
   class D : public C 
   {
-    DECLARE_POLYMORPHIC_CLASS( D, C )
+    RTTI_DECLARE_POLYMORPHIC_CLASS( D, C )
   };
 }
 
