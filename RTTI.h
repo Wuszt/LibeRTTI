@@ -457,38 +457,38 @@ namespace rtti
 	}
 }
 
-#define INHERITS_FROM_BODY_true( ParentClassName ) return ParentClassName##::GetTypeStatic() == type || ParentClassName##::GetTypeStatic().InheritsFrom( type );
-#define INHERITS_FROM_BODY_false( ParentClassName ) return false;
+#define RTTI_INHERITS_FROM_BODY_true( ParentClassName ) return ParentClassName##::GetTypeStatic() == type || ParentClassName##::GetTypeStatic().InheritsFrom( type );
+#define RTTI_INHERITS_FROM_BODY_false( ParentClassName ) return false;
 
-#define VIRTUAL_true virtual
-#define VIRTUAL_false
+#define RTTI_VIRTUAL_true virtual
+#define RTTI_VIRTUAL_false
 
-#define INHERITS_FROM_STATIC_BODY_true return Super::GetTypeStatic().IsA< T >() || Super::InheritsFromStatic< T >();
-#define INHERITS_FROM_STATIC_BODY_false return false;
+#define RTTI_INHERITS_FROM_STATIC_BODY_true return Super::GetTypeStatic().IsA< T >() || Super::InheritsFromStatic< T >();
+#define RTTI_INHERITS_FROM_STATIC_BODY_false return false;
 
-#define CONSTRUCT_INTERNAL_BODY_true( ClassName ) return nullptr;
-#define CONSTRUCT_INTERNAL_BODY_false( ClassName ) return new ClassName##();
+#define RTTI_CONSTRUCT_INTERNAL_BODY_true( ClassName ) return nullptr;
+#define RTTI_CONSTRUCT_INTERNAL_BODY_false( ClassName ) return new ClassName##();
 
-#define CONSTRUCT_IN_PLACE_INTERNAL_BODY_true( ClassName, dest )
-#define CONSTRUCT_IN_PLACE_INTERNAL_BODY_false( ClassName, dest ) new (##dest##) ClassName##();
+#define RTTI_CONSTRUCT_IN_PLACE_INTERNAL_BODY_true( ClassName, dest )
+#define RTTI_CONSTRUCT_IN_PLACE_INTERNAL_BODY_false( ClassName, dest ) new (##dest##) ClassName##();
 
 #if RTTI_REQUIRE_MOVE_CTOR
-#define MOVE_IN_PLACE_INTERNAL_true( ClassName ) virtual void MoveInPlace( void* dest, void* src  ) const override {}
-#define MOVE_IN_PLACE_INTERNAL_false( ClassName ) virtual void MoveInPlace( void* dest, void* src ) const override { new (dest) ClassName##(std::move( *static_cast< ClassName##* >( src ) ) ); }
+#define RTTI_MOVE_IN_PLACE_INTERNAL_true( ClassName ) virtual void MoveInPlace( void* dest, void* src  ) const override {}
+#define RTTI_MOVE_IN_PLACE_INTERNAL_false( ClassName ) virtual void MoveInPlace( void* dest, void* src ) const override { new (dest) ClassName##(std::move( *static_cast< ClassName##* >( src ) ) ); }
 #else
-#define MOVE_IN_PLACE_INTERNAL_true( ClassName )
-#define MOVE_IN_PLACE_INTERNAL_false( ClassName )
+#define RTTI_MOVE_IN_PLACE_INTERNAL_true( ClassName )
+#define RTTI_MOVE_IN_PLACE_INTERNAL_false( ClassName )
 #endif
 
-#define ParentClassType_true( ParentClassName ) ParentClassName::Type
-#define ParentClassType_false( ParentClassName ) ::rtti::NativeType
+#define RTTI_PARENT_CLASS_TYPE_true( ParentClassName ) ParentClassName::Type
+#define RTTI_PARENT_CLASS_TYPE_false( ParentClassName ) ::rtti::NativeType
 
-#define ParentPointerType_true( ParentClassName ) ParentClassName##::Type::PointerType
-#define ParentPointerType_false( ParentClassName ) ::rtti::PointerType
+#define RTTI_PARENT_POINTER_TYPE_true( ParentClassName ) ParentClassName##::Type::PointerType
+#define RTTI_PARENT_POINTER_TYPE_false( ParentClassName ) ::rtti::PointerType
 
-#define DECLARE_TYPE_INTERNAL_PARENT( ClassName, ParentClassName, Inherits, Virtual, Abstract ) \
+#define RTTI_DECLARE_TYPE_INTERNAL_PARENT( ClassName, ParentClassName, Inherits, Virtual, Abstract ) \
 public: \
-	using ParentClassType = ParentClassType_##Inherits##( ParentClassName ) ; \
+	using ParentClassType = RTTI_PARENT_CLASS_TYPE_##Inherits##( ParentClassName ) ; \
 	class Type : public ParentClassType \
 	{ \
 	friend class ::rtti::RTTI; \
@@ -496,7 +496,7 @@ public: \
 		virtual const char* GetName() const override; \
 		virtual bool InheritsFrom( const ::rtti::Type& type ) const override \
 		{ \
-			INHERITS_FROM_BODY_##Inherits##( ParentClassName ) \
+			RTTI_INHERITS_FROM_BODY_##Inherits##( ParentClassName ) \
 		} \
 		template< class T > \
 		bool InheritsFrom() const \
@@ -509,9 +509,9 @@ public: \
 		} \
 		virtual void ConstructInPlace( void* dest ) const override \
 		{ \
-			CONSTRUCT_IN_PLACE_INTERNAL_BODY_##Abstract##( ClassName, dest )\
+			RTTI_CONSTRUCT_IN_PLACE_INTERNAL_BODY_##Abstract##( ClassName, dest )\
 		} \
-		MOVE_IN_PLACE_INTERNAL_##Abstract##( ClassName ) \
+		RTTI_MOVE_IN_PLACE_INTERNAL_##Abstract##( ClassName ) \
 		virtual void Destroy( void* ptr ) const override \
 		{ \
 			static_cast< ClassName##* >( ptr )->~##ClassName##(); \
@@ -544,7 +544,7 @@ public: \
 				return m_properties[ index - ParentClassType::GetPropertiesAmountStatic() ].get(); \
 			} \
 		} \
-		using ParentPointerType = ParentPointerType_##Inherits##( ParentClassName ) ; \
+		using ParentPointerType = RTTI_PARENT_POINTER_TYPE_##Inherits##( ParentClassName ) ; \
 		class PointerType : public ParentPointerType \
 		{ \
 		public: \
@@ -568,9 +568,9 @@ public: \
 			{} \
 		}; \
 	protected: \
-		VIRTUAL_##Virtual ClassName##* Construct_Internal() const \
+		RTTI_VIRTUAL_##Virtual ClassName##* Construct_Internal() const \
 		{ \
-			CONSTRUCT_INTERNAL_BODY_##Abstract##( ClassName ) \
+			RTTI_CONSTRUCT_INTERNAL_BODY_##Abstract##( ClassName ) \
 		} \
 		Type(); \
 		Type( const char* name ) : ParentClassType ( name ) {} \
@@ -604,7 +604,7 @@ public: \
 	{ \
 		return IsA< T >() || InheritsFrom< T >(); \
 	} \
-	VIRTUAL_##Virtual const Type& GetType() const \
+	RTTI_VIRTUAL_##Virtual const Type& GetType() const \
 	{ \
 		return GetTypeStatic(); \
 	} \
@@ -616,43 +616,43 @@ public: \
 	template< class T > \
 	static bool InheritsFromStatic() \
 	{ \
-		INHERITS_FROM_STATIC_BODY_##Inherits; \
+		RTTI_INHERITS_FROM_STATIC_BODY_##Inherits; \
 	} \
 	using ClassType = Type; \
 private:
 
-#define DECLARE_TYPE_INTERNAL( ClassName, Virtual ) \
-DECLARE_TYPE_INTERNAL_PARENT( ClassName, ::rtti, false, Virtual, false)
+#define RTTI_DECLARE_TYPE_INTERNAL( ClassName, Virtual ) \
+RTTI_DECLARE_TYPE_INTERNAL_PARENT( ClassName, ::rtti, false, Virtual, false)
 
-#define DECLARE_TYPE_INTERNAL_PARENT_DIRECT( ClassName, ParentClassName, Virtual ) \
-DECLARE_TYPE_INTERNAL_PARENT( ClassName, ParentClassName, true, Virtual, false) \
+#define RTTI_DECLARE_TYPE_INTERNAL_PARENT_DIRECT( ClassName, ParentClassName, Virtual ) \
+RTTI_DECLARE_TYPE_INTERNAL_PARENT( ClassName, ParentClassName, true, Virtual, false) \
 	using Super = ParentClassName;
 
-#define EXPAND( x ) x
+#define RTTI_EXPAND( x ) x
 
-#define GET_DECLARE_TYPE_MACRO(_1,_2,NAME,...) NAME
+#define RTTI_GET_DECLARE_TYPE_MACRO(_1,_2,NAME,...) NAME
 
-#define DECLARE_POLYMORPHIC_CLASS(...) EXPAND(GET_DECLARE_TYPE_MACRO(__VA_ARGS__, DECLARE_TYPE_INTERNAL_PARENT_DIRECT, DECLARE_TYPE_INTERNAL)(__VA_ARGS__, true))
+#define RTTI_DECLARE_POLYMORPHIC_CLASS(...) RTTI_EXPAND(RTTI_GET_DECLARE_TYPE_MACRO(__VA_ARGS__, RTTI_DECLARE_TYPE_INTERNAL_PARENT_DIRECT, RTTI_DECLARE_TYPE_INTERNAL)(__VA_ARGS__, true))
 
-#define DECLARE_CLASS(...) EXPAND(GET_DECLARE_TYPE_MACRO(__VA_ARGS__, DECLARE_TYPE_INTERNAL_PARENT_DIRECT, DECLARE_TYPE_INTERNAL)(__VA_ARGS__, false))
+#define RTTI_DECLARE_CLASS(...) RTTI_EXPAND(RTTI_GET_DECLARE_TYPE_MACRO(__VA_ARGS__, RTTI_DECLARE_TYPE_INTERNAL_PARENT_DIRECT, RTTI_DECLARE_TYPE_INTERNAL)(__VA_ARGS__, false))
 
-#define DECLARE_STRUCT(...) DECLARE_CLASS(__VA_ARGS__) \
+#define RTTI_DECLARE_STRUCT(...) RTTI_DECLARE_CLASS(__VA_ARGS__) \
 public:
 
-#define DECLARE_ABSTRACT_TYPE_INTERNAL( ClassName ) \
-DECLARE_TYPE_INTERNAL_PARENT( ClassName, ::rtti, false, true, true)
+#define RTTI_DECLARE_ABSTRACT_TYPE_INTERNAL( ClassName ) \
+RTTI_DECLARE_TYPE_INTERNAL_PARENT( ClassName, ::rtti, false, true, true)
 
-#define DECLARE_ABSTRACT_TYPE_INTERNAL_PARENT_DIRECT( ClassName, ParentClassName ) \
-DECLARE_TYPE_INTERNAL_PARENT( ClassName, ParentClassName, true, true, true) \
+#define RTTI_DECLARE_ABSTRACT_TYPE_INTERNAL_PARENT_DIRECT( ClassName, ParentClassName ) \
+RTTI_DECLARE_TYPE_INTERNAL_PARENT( ClassName, ParentClassName, true, true, true) \
 	using Super = ParentClassName;
 
-#define DECLARE_ABSTRACT_CLASS( ... ) EXPAND( GET_DECLARE_TYPE_MACRO( __VA_ARGS__, DECLARE_ABSTRACT_TYPE_INTERNAL_PARENT_DIRECT, DECLARE_ABSTRACT_TYPE_INTERNAL )( __VA_ARGS__ ) )
+#define RTTI_DECLARE_ABSTRACT_CLASS( ... ) RTTI_EXPAND( RTTI_GET_DECLARE_TYPE_MACRO( __VA_ARGS__, RTTI_DECLARE_ABSTRACT_TYPE_INTERNAL_PARENT_DIRECT, RTTI_DECLARE_ABSTRACT_TYPE_INTERNAL )( __VA_ARGS__ ) )
 
-#define CONCAT(X, Y) CONCAT2(X, Y)
-#define CONCAT2(X,Y) X##Y
+#define RTTI_CONCAT(X, Y) RTTI_CONCAT2(X, Y)
+#define RTTI_CONCAT2(X,Y) X##Y
 
-#define CREATE_TYPE_INSTANCE( TypeClass ) \
-namespace CONCAT( rtti_internal, __COUNTER__ ) \
+#define RTTI_REGISTER_TYPE( TypeClass ) \
+namespace RTTI_CONCAT( rtti_internal, __COUNTER__ ) \
 { \
 namespace \
 { \
@@ -661,7 +661,7 @@ static Initializer s_initializer; \
 } \
 }
 
-#define IMPLEMENT_TYPE( NamespaceClassName, ... ) \
+#define RTTI_IMPLEMENT_TYPE( NamespaceClassName, ... ) \
 NamespaceClassName##::Type::Type() : NamespaceClassName##::Type::Type( GetName() ) \
 { \
 } \
@@ -674,11 +674,11 @@ const char* NamespaceClassName##::Type::GetName() const \
 { \
 	return #NamespaceClassName; \
 } \
-CREATE_TYPE_INSTANCE( NamespaceClassName##::Type )
+RTTI_REGISTER_TYPE( NamespaceClassName##::Type )
 
-#define REGISTER_PROPERTY( PropertyName ) m_properties.emplace_back( CreateProperty< decltype( CurrentlyImplementedType::##PropertyName ) >( #PropertyName, offsetof( CurrentlyImplementedType, PropertyName ) ) );
+#define RTTI_REGISTER_PROPERTY( PropertyName ) m_properties.emplace_back( CreateProperty< decltype( CurrentlyImplementedType::##PropertyName ) >( #PropertyName, offsetof( CurrentlyImplementedType, PropertyName ) ) );
 
-#define DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( type ) \
+#define RTTI_DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( type ) \
 template<> \
 inline const char* ::rtti::PrimitiveType< type >::GetName() const \
 { \
@@ -689,14 +689,14 @@ inline bool rtti::Type::IsA< type >() const \
 { \
 	return *this == ::rtti::PrimitiveType< type >::GetInstance(); \
 } \
-CREATE_TYPE_INSTANCE( ::rtti::PrimitiveType<##type##> )
+RTTI_REGISTER_TYPE( ::rtti::PrimitiveType<##type##> )
 
-DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( float )
-DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( __int32 )
-DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( __int64 )
-DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( bool )
-DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( unsigned short )
-DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( unsigned )
-DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( unsigned long long )
-DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( double )
-DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( __int8 )
+RTTI_DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( float )
+RTTI_DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( __int32 )
+RTTI_DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( __int64 )
+RTTI_DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( bool )
+RTTI_DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( unsigned short )
+RTTI_DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( unsigned )
+RTTI_DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( unsigned long long )
+RTTI_DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( double )
+RTTI_DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( __int8 )
