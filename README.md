@@ -241,7 +241,7 @@ dType.IsVirtual(); // true
 
 dType.IsA< d::D >(); // true
 dType.IsA< C >(); // false
-dType.IsA( cType ); // false
+dType.IsA == cType; // false
 
 dType.InheritsFrom< d::D >(); // false
 dType.InheritsFrom< C >(); // true
