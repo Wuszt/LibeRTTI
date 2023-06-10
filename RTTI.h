@@ -74,7 +74,6 @@ namespace rtti
 		const T& GetOrRegisterDynamicType( const TArgs& ... args );
 
 	private:
-		bool IsNativeTypeRegistered( const NativeType& testType );
 
 		std::unordered_map< TypeId, const NativeType* > m_nativeTypes;
 		std::unordered_map< TypeId, std::unique_ptr< const DynamicType > > m_dynamicTypes;
@@ -173,7 +172,10 @@ namespace rtti
 			return *this == T::GetTypeStatic();
 		}
 
-		virtual bool InheritsFrom( const Type& type ) const = 0;
+		virtual bool InheritsFrom( const Type& type ) const 
+		{ 
+			return false;
+		}
 
 		template< class T >
 		bool InheritsFrom() const
@@ -187,7 +189,7 @@ namespace rtti
 			return false;
 		}
 
-		virtual bool operator==( const Type& rhl ) const
+		bool operator==( const Type& rhl ) const
 		{
 			return GetID() == rhl.GetID();
 		}
@@ -259,7 +261,7 @@ namespace rtti
 		template< class T >
 		static std::unique_ptr< ::rtti::Property > CreateProperty( const char* name, size_t offset )
 		{
-			return std::unique_ptr< ::rtti::Property >( new ::rtti::Property( name, offset, GetTypeOf< T >() ) );
+			return std::unique_ptr< ::rtti::Property >( new ::rtti::Property( name, offset, GetTypeInstanceOf< T >() ) );
 		}
 
 	private:
@@ -308,22 +310,27 @@ namespace rtti
 	class PointerType : public DynamicType
 	{
 	private:
-		static constexpr const char* s_namePostfix = "*";
+		static constexpr const char* c_namePostfix = "*";
 
 	public:
 		static TypeId CalcId( const Type& internalType )
 		{
 			TypeId id = rtti_internal::CalcHash( internalType.GetName() );
-			return rtti_internal::CalcHash( s_namePostfix, id );
+			return rtti_internal::CalcHash( c_namePostfix, id );
 		}
 
 		virtual const char* GetName() const override { return m_strName.c_str(); }
 
-		virtual bool InheritsFrom( const Type& type ) const override { return false; }
-		virtual void ConstructInPlace( void* dest ) const override { *static_cast< void** >( dest ) = nullptr; }
+		virtual void ConstructInPlace( void* dest ) const override
+		{ 
+			*static_cast< void** >( dest ) = nullptr;
+		}
 
 #if RTTI_REQUIRE_MOVE_CTOR
-		virtual void MoveInPlace( void* dest, void* src ) const override { std::memcpy( dest, src, GetSize() );	}
+		virtual void MoveInPlace( void* dest, void* src ) const override 
+		{ 
+			std::memcpy( dest, src, GetSize() );
+		}
 #endif
 
 		void Destroy( void* ptr ) const override {}
@@ -338,11 +345,85 @@ namespace rtti
 		PointerType( const Type& internalType )
 			: DynamicType( CalcId( internalType ) )
 			, m_internalType( internalType )
-			, m_strName( std::string( internalType.GetName() ) + s_namePostfix )
+			, m_strName( std::string( internalType.GetName() ) + c_namePostfix )
 		{}
 
 		std::string m_strName;
 		const Type& m_internalType;
+	};
+
+	class ContainerType : public DynamicType
+	{
+	public:
+		using DynamicType::DynamicType;
+		virtual const Type& GetInternalType() const = 0;
+	};
+
+	template< class T >
+	class VectorType : public ContainerType
+	{
+		friend class ::rtti::RTTI;
+
+		static constexpr const char* c_namePrefix = "Vector< ";
+		static constexpr const char* c_namePostfix = " >";
+
+	public:
+		static TypeId CalcId()
+		{
+			TypeId id = rtti_internal::CalcHash( c_namePrefix );
+			id = rtti_internal::CalcHash( GetInternalTypeStatic().GetName(), id );
+			return rtti_internal::CalcHash( c_namePostfix, id );
+		}
+
+		static const VectorType< T >& GetInstance()
+		{
+			return ::rtti::RTTI::GetMutable().GetOrRegisterDynamicType< VectorType< T > >();
+		}
+
+		static const Type& GetInternalTypeStatic()
+		{
+			return GetTypeInstanceOf< T >();
+		}
+
+		virtual const Type& GetInternalType() const override
+		{
+			return GetInternalTypeStatic();
+		}
+
+		virtual const char* GetName() const override
+		{
+			return m_name.c_str();
+		}
+
+		virtual void ConstructInPlace( void* dest ) const override
+		{
+			*static_cast< std::vector< T >* >( dest ) = std::vector< T >();
+		}
+
+#if RTTI_REQUIRE_MOVE_CTOR
+		virtual void MoveInPlace( void* dest, void* src ) const override
+		{
+			new ( dest ) std::vector< T >( std::move( *static_cast< std::vector< T >* >( src ) ) );
+		}
+#endif
+
+		virtual void Destroy( void* ptr ) const override
+		{
+			static_cast< std::vector< T >* >( ptr )->~vector< T >();
+		}
+
+		virtual size_t GetSize() const override
+		{
+			return sizeof( std::vector< T > );
+		}
+
+	private:
+		VectorType()
+			: ContainerType( CalcId() )
+			, m_name( std::string( c_namePrefix ) + GetInternalType().GetName() + c_namePostfix )
+		{}
+
+		std::string m_name;
 	};
 
 	template< class T, class... TArgs >
@@ -367,13 +448,21 @@ namespace rtti
 
 	public:
 		virtual const char* GetName() const;
-		virtual bool InheritsFrom( const Type& type ) const { return false; }
-		virtual void ConstructInPlace( void* dest ) const { *static_cast< T* >( dest ) = T(); }
+		virtual void ConstructInPlace( void* dest ) const 
+		{
+			*static_cast< T* >( dest ) = T();
+		}
+
 #if RTTI_REQUIRE_MOVE_CTOR
-		virtual void MoveInPlace( void* dest, void* src ) const { std::memcpy( dest, src, sizeof( T ) ); }
+		virtual void MoveInPlace( void* dest, void* src ) const
+		{ 
+			std::memcpy( dest, src, sizeof( T ) ); 
+		}
 #endif
 		virtual void Destroy( void* ptr ) const {}
+
 		virtual size_t GetSize() const { return sizeof( T ); }
+
 		virtual bool IsPrimitive() const { return true; }
 
 		static const rtti::PrimitiveType< T >& GetInstance()
@@ -386,8 +475,15 @@ namespace rtti
 			friend class ::rtti::RTTI;
 
 		public:
-			static TypeId CalcId( const ::rtti::Type& internalType ) { return ::rtti::PointerType::CalcId( internalType ); }
-			static TypeId CalcId() { return ::rtti::PointerType::CalcId( PrimitiveType< T >::GetInstance() ); }
+			static TypeId CalcId( const ::rtti::Type& internalType ) 
+			{ 
+				return ::rtti::PointerType::CalcId( internalType );
+			}
+
+			static TypeId CalcId() 
+			{ 
+				return ::rtti::PointerType::CalcId( PrimitiveType< T >::GetInstance() ); 
+			}
 
 			template< size_t IndirectionsAmount, std::enable_if_t< IndirectionsAmount == 1, bool > = true >
 			static const PointerType& GetInstance()
@@ -422,21 +518,6 @@ namespace rtti
 		}
 	};
 
-	template< class T, class T2 = void >
-	struct type_of {};
-
-	template< class T >
-	struct type_of< T, std::enable_if_t< std::is_class_v< T > > > { using type = T::Type; };
-
-	template< class T >
-	struct type_of< T, std::enable_if_t< std::is_fundamental_v< T > > > { using type = PrimitiveType< T >; };
-
-	template< class T, std::enable_if_t< std::is_class_v< T > || std::is_fundamental_v< T >, bool > = true >
-	const Type& GetTypeOf()
-	{
-		return type_of< T >::type::GetInstance();
-	}
-
 	template< class T, int Amount, class T2 = void >
 	struct extract_indirections_internal {};
 
@@ -449,11 +530,49 @@ namespace rtti
 	template< class T >
 	struct extract_indirections : extract_indirections_internal< T, 0 > {};
 
-	template< class T, std::enable_if_t< std::is_pointer_v< T >, bool > = true >
-	const Type& GetTypeOf()
+	template <typename> struct is_template : std::false_type {};
+
+	template <template <typename...> class Tmpl, typename ...Args>
+	struct is_template<Tmpl<Args...>> : std::true_type {};
+
+	template< class T >
+	struct is_vector : std::false_type{};
+
+	template< class T >
+	struct is_vector< std::vector< T > > : std::true_type {};
+
+	template< class T, class T2 = void >
+	struct type_of {};
+
+	template< class T >
+	struct type_of< T, std::enable_if_t< std::is_class_v< T > && !is_template< T >::value > > { using type = T::Type; };
+
+	template< class T >
+	struct type_of< T, std::enable_if_t< std::is_fundamental_v< T > > > { using type = PrimitiveType< T >; };
+
+	template< class T >
+	struct type_of< T, std::enable_if_t< std::is_pointer_v< T > > > { using type = type_of< typename extract_indirections< T >::type >::type::PointerType; };
+
+	template< class T >
+	struct type_of< T, std::enable_if_t< is_vector< T >::value > > { using type = VectorType< typename T::value_type >; };
+
+	template< class T, std::enable_if_t< ( std::is_class_v< T > && !is_template< T >::value ) || std::is_fundamental_v< T >, bool > = true >
+	const Type& GetTypeInstanceOf()
 	{
-		using PointerType = typename type_of< typename extract_indirections< T >::type >::type::PointerType;
+		return type_of< T >::type::GetInstance();
+	}
+
+	template< class T, std::enable_if_t< std::is_pointer_v< T >, bool > = true >
+	const ::rtti::PointerType& GetTypeInstanceOf()
+	{
+		using PointerType = type_of< T >::type;
 		return PointerType::template GetInstance< extract_indirections< T >::amount >();
+	}
+
+	template< class T, std::enable_if_t< is_vector< T >::value, bool > = true >
+	const VectorType< typename T::value_type >& GetTypeInstanceOf()
+	{
+		return VectorType< typename T::value_type >::GetInstance();
 	}
 }
 
