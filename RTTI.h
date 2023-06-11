@@ -32,10 +32,6 @@
 #define RTTI_REQUIRE_MOVE_CTOR 1
 #endif
 
-#ifndef RTTI_ALLOW_MULTI_POINTERS
-#define RTTI_ALLOW_MULTI_POINTERS 1
-#endif
-
 namespace rtti
 {
 	class Type;
@@ -307,6 +303,7 @@ namespace rtti
 		{}
 	};
 
+	template< size_t IndirectionsAmount = 1u >
 	class PointerType : public DynamicType
 	{
 	private:
@@ -351,6 +348,9 @@ namespace rtti
 		std::string m_strName;
 		const Type& m_internalType;
 	};
+
+	template<>
+	class PointerType< 0u >{};
 
 	class ContainerType : public DynamicType
 	{
@@ -470,42 +470,37 @@ namespace rtti
 			return GetMutableInstance();
 		}
 
-		class PointerType : public ::rtti::PointerType
+		template< size_t IndirectionsAmount = 1u >
+		class PointerType : public ::rtti::PointerType< IndirectionsAmount >
 		{
 			friend class ::rtti::RTTI;
 
 		public:
-			static TypeId CalcId( const ::rtti::Type& internalType ) 
-			{ 
-				return ::rtti::PointerType::CalcId( internalType );
-			}
-
 			static TypeId CalcId() 
 			{ 
-				return ::rtti::PointerType::CalcId( PrimitiveType< T >::GetInstance() ); 
+				return ::rtti::PointerType< IndirectionsAmount >::CalcId( GetInternalType() );
 			}
 
-			template< size_t IndirectionsAmount, std::enable_if_t< IndirectionsAmount == 1, bool > = true >
-			static const PointerType& GetInstance()
-			{ 
-				return RTTI::GetMutable().GetOrRegisterDynamicType< PointerType >();
-			}
-
-#if RTTI_ALLOW_MULTI_POINTERS
-			template< size_t IndirectionsAmount, std::enable_if_t< (IndirectionsAmount > 1), bool > = true >
 			static const PointerType& GetInstance()
 			{
-				return RTTI::GetMutable().GetOrRegisterDynamicType< PointerType >( GetInstance< IndirectionsAmount - 1 >() );
+				return RTTI::GetMutable().GetOrRegisterDynamicType< PointerType< IndirectionsAmount > >();
 			}
-#endif
 
 		private:
-			PointerType( const PointerType& internalType ) 
-				: ::rtti::PointerType( static_cast< const Type& >( internalType ) )
-			{}
+			template< size_t IA = IndirectionsAmount - 1, std::enable_if_t< ( IA > 0 ), bool > = true >
+			static const ::rtti::Type& GetInternalType()
+			{
+				return RTTI::GetMutable().GetOrRegisterDynamicType< PointerType< IA > >();
+			}
 
-			PointerType() 
-				: ::rtti::PointerType( PrimitiveType< T >::GetInstance() )
+			template< size_t IA = IndirectionsAmount - 1, std::enable_if_t< ( IA == 0 ), bool > = true >
+				static const ::rtti::Type& GetInternalType()
+			{
+				return PrimitiveType< T >::GetInstance();
+			}
+
+			PointerType()
+				: ::rtti::PointerType< IndirectionsAmount >( GetInternalType() )
 			{}
 		};
 
@@ -551,28 +546,15 @@ namespace rtti
 	struct type_of< T, std::enable_if_t< std::is_fundamental_v< T > > > { using type = PrimitiveType< T >; };
 
 	template< class T >
-	struct type_of< T, std::enable_if_t< std::is_pointer_v< T > > > { using type = type_of< typename extract_indirections< T >::type >::type::PointerType; };
+	struct type_of< T, std::enable_if_t< std::is_pointer_v< T > > > { using type = type_of< typename extract_indirections< T >::type >::type::template PointerType< extract_indirections< T >::amount >; };
 
 	template< class T >
 	struct type_of< T, std::enable_if_t< is_vector< T >::value > > { using type = VectorType< typename T::value_type >; };
 
-	template< class T, std::enable_if_t< ( std::is_class_v< T > && !is_template< T >::value ) || std::is_fundamental_v< T >, bool > = true >
-	const Type& GetTypeInstanceOf()
+	template< class T >
+	const typename type_of< T >::type& GetTypeInstanceOf()
 	{
 		return type_of< T >::type::GetInstance();
-	}
-
-	template< class T, std::enable_if_t< std::is_pointer_v< T >, bool > = true >
-	const ::rtti::PointerType& GetTypeInstanceOf()
-	{
-		using PointerType = type_of< T >::type;
-		return PointerType::template GetInstance< extract_indirections< T >::amount >();
-	}
-
-	template< class T, std::enable_if_t< is_vector< T >::value, bool > = true >
-	const VectorType< typename T::value_type >& GetTypeInstanceOf()
-	{
-		return VectorType< typename T::value_type >::GetInstance();
 	}
 }
 
@@ -663,27 +645,35 @@ public: \
 				return m_properties[ index - ParentClassType::GetPropertiesAmountStatic() ].get(); \
 			} \
 		} \
-		using ParentPointerType = RTTI_PARENT_POINTER_TYPE_##Inherits##( ParentClassName ) ; \
-		class PointerType : public ParentPointerType \
+		template< size_t IndirectionsAmount > \
+		using ParentPointerType = RTTI_PARENT_POINTER_TYPE_##Inherits##( ParentClassName )< IndirectionsAmount >; \
+		template< size_t IndirectionsAmount = 1u > \
+		class PointerType : public ParentPointerType< IndirectionsAmount > \
 		{ \
+		friend class ::rtti::RTTI; \
 		public: \
-			static ::rtti::TypeId CalcId( const Type& internalType ) { return ::rtti::PointerType::CalcId( internalType ); } \
-			static ::rtti::TypeId CalcId() { return ::rtti::PointerType::CalcId( ClassName##::Type::GetInstance() ); } \
-			template< size_t IndirectionsAmount, std::enable_if_t< IndirectionsAmount == 1, bool > = true > \
-			static const PointerType& GetInstance() \
+			static ::rtti::TypeId CalcId() { return ::rtti::PointerType< IndirectionsAmount >::CalcId( GetInternalType() ); } \
+			static const PointerType< IndirectionsAmount >& GetInstance() \
 			{ \
-				return ::rtti::RTTI::GetMutable().GetOrRegisterDynamicType< PointerType >(); \
+				return ::rtti::RTTI::GetMutable().GetOrRegisterDynamicType< PointerType< IndirectionsAmount > >(); \
 			} \
-			template< size_t IndirectionsAmount, std::enable_if_t< ( IndirectionsAmount > 1 ), bool > = true > \
-			static const PointerType& GetInstance() \
+			template< size_t IA = IndirectionsAmount - 1, std::enable_if_t< ( IA > 0 ), bool > = true > \
+			static const ::rtti::Type& GetInternalType() \
 			{ \
-				return ::rtti::RTTI::GetMutable().GetOrRegisterDynamicType< PointerType >( static_cast< const Type& >( GetInstance< IndirectionsAmount - 1 >() ) ); \
+				return ::rtti::RTTI::GetMutable().GetOrRegisterDynamicType< PointerType< IA > >(); \
 			} \
-			PointerType() \
-				: ParentPointerType( ClassName##::Type::GetInstance() ) \
+			template< size_t IA = IndirectionsAmount - 1, std::enable_if_t< ( IA == 0 ), bool > = true > \
+			static const ::rtti::Type& GetInternalType() \
+			{ \
+				return ClassName##::Type::GetInstance(); \
+			} \
+		protected: \
+			explicit PointerType( const ::rtti::Type& internalType ) \
+				: ParentPointerType < IndirectionsAmount >( internalType ) \
 			{} \
-			PointerType( const Type& internalType ) \
-				: ParentPointerType( internalType ) \
+		private: \
+			PointerType() \
+				: ParentPointerType < IndirectionsAmount >( GetInternalType() ) \
 			{} \
 		}; \
 	protected: \
