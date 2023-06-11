@@ -35,20 +35,47 @@
 namespace rtti
 {
 	class Type;
-	class NativeType;
-	class DynamicType;
 
 	using TypeId = size_t;
+
+	namespace rtti_internal
+	{
+		// Java's hashCode for String
+		static constexpr size_t CalcHash( const char* name, size_t seed = 0u )
+		{
+			for ( size_t i = 0u; name[ i ] != 0; ++i )
+			{
+				seed = name[ i ] + seed * 31;
+			}
+
+			return seed;
+		}
+
+		template< class T >
+		class has_CalcId
+		{
+			using yes = char;
+			using no = char[ 2 ];
+
+			template <typename U, U> struct really_has;
+
+			template<typename C> static yes& Test( really_has < TypeId(), &C::CalcId >* );
+			template<typename> static no& Test( ... );
+
+		public:
+			static constexpr bool value = sizeof( Test<T>( 0 ) ) == sizeof( yes );
+		};
+	}
 
 	class RTTI
 	{
 	public:
-		void GetNativeTypes( std::vector< const NativeType* >& outTypes ) const
+		void GetTypes( std::vector< const Type* >& outTypes ) const
 		{
-			outTypes.reserve( m_nativeTypes.size() );
-			for ( const auto& [id, type] : m_nativeTypes )
+			outTypes.reserve( m_types.size() );
+			for ( const auto& [id, type] : m_types )
 			{
-				outTypes.emplace_back(type);
+				outTypes.emplace_back( type.get() );
 			}
 		}
 
@@ -63,38 +90,53 @@ namespace rtti
 			return s_rtti;
 		}
 
-		template< class T >
-		void RegisterNativeType();
+		template< class T, class... TArgs, std::enable_if_t< rtti_internal::has_CalcId< T >::value, bool > = true >
+		const T& GetOrRegisterType( const TArgs& ... args )
+		{
+			TypeId id = T::CalcId( args... );
+			auto found = m_types.find( id );
 
-		template< class T, class... TArgs >
-		const T& GetOrRegisterDynamicType( const TArgs& ... args );
+			if ( found != m_types.end() )
+			{
+				return static_cast< const T& >( *found->second );
+			}
+
+			T* instance = new T( std::forward< TArgs >( args )... );
+			m_types.emplace( id, instance );
+
+			instance->OnRegistered();
+
+			return *instance;
+		}
+
+		template< class T, class... TArgs, std::enable_if_t< !rtti_internal::has_CalcId< T >::value, bool > = true >
+		const T& GetOrRegisterType( const TArgs& ... args )
+		{
+			std::unique_ptr< T > instance( new T( std::forward< TArgs >( args )... ) );
+
+			auto currentInstance = m_types.find( instance->GetID() );
+
+			if ( currentInstance == m_types.end() )
+			{
+				T& result = *instance;
+				currentInstance = m_types.emplace( instance->GetID(), std::move( instance ) ).first;
+
+				result.OnRegistered();
+				return result;
+			}
+
+			return static_cast< const T& >( *currentInstance->second );
+		}
 
 	private:
-
-		std::unordered_map< TypeId, const NativeType* > m_nativeTypes;
-		std::unordered_map< TypeId, std::unique_ptr< const DynamicType > > m_dynamicTypes;
+		std::unordered_map< TypeId, std::unique_ptr< const Type > > m_types;
 	};
 
 	static auto Get = RTTI::Get;
 
-	namespace rtti_internal
-	{
-		// Java's hashCode for String
-		static constexpr size_t CalcHash( const char* name, size_t seed = 0u )
-		{
-			for ( size_t i = 0u; name[ i ] != 0; ++i )
-			{
-				seed = name[ i ] + seed * 31;
-			}
-
-			return seed;
-		}
-	}
-
 	class Property
 	{
 		friend class Type;
-
 	public:
 		virtual ~Property() = default;
 
@@ -247,9 +289,15 @@ namespace rtti
 		}
 
 	protected:
+		Type( const char* name )
+			: Type( rtti_internal::CalcHash( name ) )
+		{}
+
 		Type( TypeId id )
 			: m_id( id )
 		{}
+
+		virtual void OnRegistered() {}
 
 		static size_t GetPropertiesAmountStatic() { return 0u; }
 		static const ::rtti::Property* GetPropertyStatic( size_t index ) { return nullptr; }
@@ -264,49 +312,9 @@ namespace rtti
 		TypeId m_id = 0u;
 	};
 
-	class NativeType : public Type
-	{
-	protected:
-		NativeType( const char* name )
-			: Type( rtti_internal::CalcHash( name ) )
-		{}
-
-		virtual void OnRegistered() {}
-	};
-
-	template< class T >
-	inline void RTTI::RegisterNativeType()
-	{
-		T& instance = T::GetMutableInstance();
-		if ( m_nativeTypes.contains( instance.GetID() ) )
-		{
-			if ( m_nativeTypes[ instance.GetID() ] == &instance )
-			{
-				return;
-			}
-
-			// Your types have to be unique! You probably declared 2 classes with the same name in 2 different TUs.
-			throw;
-		}
-
-		instance.OnRegistered();
-
-		m_nativeTypes.emplace( instance.GetID(), &instance );
-	}
-
-	class DynamicType : public Type
-	{
-		friend class ::rtti::RTTI;
-	protected:
-		DynamicType( TypeId id )
-			: Type( id )
-		{}
-	};
-
 	template< size_t IndirectionsAmount = 1u >
-	class PointerType : public DynamicType
+	class PointerType : public Type
 	{
-	private:
 		static constexpr const char* c_namePostfix = "*";
 
 	public:
@@ -340,7 +348,7 @@ namespace rtti
 
 	protected:
 		PointerType( const Type& internalType )
-			: DynamicType( CalcId( internalType ) )
+			: Type( CalcId( internalType ) )
 			, m_internalType( internalType )
 			, m_strName( std::string( internalType.GetName() ) + c_namePostfix )
 		{}
@@ -352,10 +360,10 @@ namespace rtti
 	template<>
 	class PointerType< 0u >{};
 
-	class ContainerType : public DynamicType
+	class ContainerType : public Type
 	{
 	public:
-		using DynamicType::DynamicType;
+		using Type::Type;
 		virtual const Type& GetInternalType() const = 0;
 	};
 
@@ -377,7 +385,7 @@ namespace rtti
 
 		static const VectorType< T >& GetInstance()
 		{
-			return ::rtti::RTTI::GetMutable().GetOrRegisterDynamicType< VectorType< T > >();
+			return ::rtti::RTTI::GetMutable().GetOrRegisterType< VectorType< T > >();
 		}
 
 		static const Type& GetInternalTypeStatic()
@@ -426,22 +434,8 @@ namespace rtti
 		std::string m_name;
 	};
 
-	template< class T, class... TArgs >
-	const T& RTTI::GetOrRegisterDynamicType( const TArgs& ... args )
-	{
-		TypeId id = T::CalcId( args... );
-		auto found = m_dynamicTypes.find( id );
-
-		if ( found != m_dynamicTypes.end() )
-		{
-			return static_cast< const T& >( *found->second );
-		}
-
-		return static_cast< const T& >( *m_dynamicTypes.emplace( id, new T( args... ) ).first->second );
-	}
-
 	template< class T >
-	class PrimitiveType : public NativeType
+	class PrimitiveType : public Type
 	{
 		static_assert( std::is_arithmetic_v< T >, "That's not a primitive type!" );
 		friend class ::rtti::RTTI;
@@ -459,15 +453,16 @@ namespace rtti
 			std::memcpy( dest, src, sizeof( T ) ); 
 		}
 #endif
-		virtual void Destroy( void* ptr ) const {}
+		virtual void Destroy( void* ptr ) const override {}
 
-		virtual size_t GetSize() const { return sizeof( T ); }
+		virtual size_t GetSize() const override { return sizeof( T ); }
 
-		virtual bool IsPrimitive() const { return true; }
+		virtual bool IsPrimitive() const override { return true; }
 
 		static const rtti::PrimitiveType< T >& GetInstance()
 		{
-			return GetMutableInstance();
+			static const rtti::PrimitiveType< T >& s_typeInstance = ::rtti::RTTI::GetMutable().GetOrRegisterType< rtti::PrimitiveType< T > >();
+			return s_typeInstance;
 		}
 
 		template< size_t IndirectionsAmount = 1u >
@@ -483,14 +478,15 @@ namespace rtti
 
 			static const PointerType& GetInstance()
 			{
-				return RTTI::GetMutable().GetOrRegisterDynamicType< PointerType< IndirectionsAmount > >();
+				static const PointerType& s_typeInstance = ::rtti::RTTI::GetMutable().GetOrRegisterType< PointerType >();
+				return s_typeInstance;
 			}
 
 		private:
 			template< size_t IA = IndirectionsAmount - 1, std::enable_if_t< ( IA > 0 ), bool > = true >
 			static const ::rtti::Type& GetInternalType()
 			{
-				return RTTI::GetMutable().GetOrRegisterDynamicType< PointerType< IA > >();
+				return RTTI::GetMutable().GetOrRegisterType< PointerType< IA > >();
 			}
 
 			template< size_t IA = IndirectionsAmount - 1, std::enable_if_t< ( IA == 0 ), bool > = true >
@@ -505,12 +501,7 @@ namespace rtti
 		};
 
 	private:
-		PrimitiveType< T >() : rtti::NativeType( GetName() ) {}
-		static rtti::PrimitiveType< T >& GetMutableInstance()
-		{
-			static rtti::PrimitiveType< T > s_typeInstance;
-			return s_typeInstance;
-		}
+		PrimitiveType< T >() : rtti::Type( GetName() ) {}
 	};
 
 	template< class T, int Amount, class T2 = void >
@@ -582,7 +573,7 @@ namespace rtti
 #endif
 
 #define RTTI_PARENT_CLASS_TYPE_true( ParentClassName ) ParentClassName::Type
-#define RTTI_PARENT_CLASS_TYPE_false( ParentClassName ) ::rtti::NativeType
+#define RTTI_PARENT_CLASS_TYPE_false( ParentClassName ) ::rtti::Type
 
 #define RTTI_PARENT_POINTER_TYPE_true( ParentClassName ) ParentClassName##::Type::PointerType
 #define RTTI_PARENT_POINTER_TYPE_false( ParentClassName ) ::rtti::PointerType
@@ -631,7 +622,8 @@ public: \
 		} \
 		static const Type& GetInstance() \
 		{ \
-			return GetMutableInstance(); \
+			static const Type& s_typeInstance = ::rtti::RTTI::GetMutable().GetOrRegisterType< Type >(); \
+			return s_typeInstance; \
 		} \
 		virtual size_t GetPropertiesAmount() const override { return ParentClassType::GetPropertiesAmountStatic() + m_properties.size(); } \
 		virtual const ::rtti::Property* GetProperty( size_t index ) const override \
@@ -655,12 +647,13 @@ public: \
 			static ::rtti::TypeId CalcId() { return ::rtti::PointerType< IndirectionsAmount >::CalcId( GetInternalType() ); } \
 			static const PointerType< IndirectionsAmount >& GetInstance() \
 			{ \
-				return ::rtti::RTTI::GetMutable().GetOrRegisterDynamicType< PointerType< IndirectionsAmount > >(); \
+				static const PointerType& s_typeInstance = ::rtti::RTTI::GetMutable().GetOrRegisterType< PointerType >(); \
+				return s_typeInstance; \
 			} \
 			template< size_t IA = IndirectionsAmount - 1, std::enable_if_t< ( IA > 0 ), bool > = true > \
 			static const ::rtti::Type& GetInternalType() \
 			{ \
-				return ::rtti::RTTI::GetMutable().GetOrRegisterDynamicType< PointerType< IA > >(); \
+				return ::rtti::RTTI::GetMutable().GetOrRegisterType< PointerType< IA > >(); \
 			} \
 			template< size_t IA = IndirectionsAmount - 1, std::enable_if_t< ( IA == 0 ), bool > = true > \
 			static const ::rtti::Type& GetInternalType() \
@@ -688,11 +681,6 @@ public: \
 		virtual void OnRegistered() override; \
 	private: \
 		std::vector< std::unique_ptr< ::rtti::Property > > m_properties; \
-		static Type& GetMutableInstance() \
-		{ \
-			static Type s_typeInstance; \
-			return s_typeInstance; \
-		} \
 	}; \
 	static const Type& GetTypeStatic() \
 	{ \
@@ -765,7 +753,7 @@ namespace RTTI_CONCAT( rtti_internal, __COUNTER__ ) \
 { \
 namespace \
 { \
-struct Initializer { Initializer() { ::rtti::RTTI::GetMutable().RegisterNativeType< TypeClass >(); } }; \
+struct Initializer { Initializer() { ::rtti::RTTI::GetMutable().GetOrRegisterType< TypeClass >(); } }; \
 static Initializer s_initializer; \
 } \
 }
