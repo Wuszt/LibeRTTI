@@ -305,7 +305,7 @@ namespace rtti
 		template< class T >
 		static std::unique_ptr< ::rtti::Property > CreateProperty( const char* name, size_t offset )
 		{
-			return std::unique_ptr< ::rtti::Property >( new ::rtti::Property( name, offset, GetTypeInstanceOf< T >() ) );
+			return std::unique_ptr< ::rtti::Property >( new ::rtti::Property( name, offset, GetTypeInstanceOf< std::remove_const_t< T > >() ) );
 		}
 
 	private:
@@ -537,7 +537,7 @@ namespace rtti
 	struct type_of< T, std::enable_if_t< std::is_fundamental_v< T > > > { using type = PrimitiveType< T >; };
 
 	template< class T >
-	struct type_of< T, std::enable_if_t< std::is_pointer_v< T > > > { using type = type_of< typename extract_indirections< T >::type >::type::template PointerType< extract_indirections< T >::amount >; };
+	struct type_of< T, std::enable_if_t< std::is_pointer_v< T > > > { using type = type_of< std::remove_const_t< typename extract_indirections< T >::type > >::type::template PointerType< extract_indirections< T >::amount >; };
 
 	template< class T >
 	struct type_of< T, std::enable_if_t< is_vector< T >::value > > { using type = VectorType< typename T::value_type >; };
