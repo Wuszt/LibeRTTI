@@ -23,22 +23,78 @@
  */
 
 #pragma once
-#include <vector>
-#include <unordered_map>
-#include <memory>
-#include <type_traits>
-#include <array>
 
 #ifndef RTTI_REQUIRE_MOVE_CTOR
 #define RTTI_REQUIRE_MOVE_CTOR 1
 #endif
+
+#include <vector>
+#include <unordered_map>
+#include <memory>
+#include <type_traits>
+#include <string>
 
 #pragma region ForwardDeclarations
 namespace rtti
 {
 class Type;
 template< class T, class T2 = void > class PointerType;
+template< class T > class VectorType;
+template< class T, size_t Count > class ArrayType;
+template< class T > class PrimitiveType;
 using TypeId = size_t;
+}
+#pragma endregion
+
+#pragma region TypeOf
+namespace rtti
+{
+	namespace internal
+	{
+		template <typename> struct is_template : std::false_type {};
+
+		template <template <typename...> class Tmpl, typename ...Args>
+		struct is_template<Tmpl<Args...>> : std::true_type {};
+
+		template< class T >
+		struct is_vector : std::false_type {};
+
+		template< class T >
+		struct is_vector< std::vector< T > > : std::true_type {};
+
+		template<class T>
+		struct is_array : std::false_type {};
+
+		template<class T, std::size_t N>
+		struct is_array<T[ N ]> : std::true_type {};
+
+		template<class T, std::size_t N>
+		struct is_array< std::array< T, N > > : std::true_type {};
+	}
+
+	template< class T, class T2 = void >
+	struct type_of {};
+
+	template< class T >
+	struct type_of< T, std::enable_if_t< std::is_class_v< T > && !internal::is_template< T >::value && !internal::is_array< T >::value > > { using type = typename T::Type; };
+
+	template< class T >
+	struct type_of< T, std::enable_if_t< std::is_fundamental_v< T > > > { using type = PrimitiveType< T >; };
+
+	template< class T >
+	struct type_of< T, std::enable_if_t< std::is_pointer_v< T > > > { using type = PointerType< std::remove_const_t< std::remove_pointer_t< T > > >; };
+
+	template< class T >
+	struct type_of< T, std::enable_if_t< internal::is_vector< T >::value > > { using type = VectorType< typename T::value_type >; };
+
+	template< class T >
+	struct type_of< T, std::enable_if_t< internal::is_array< T >::value > >{ private: using internalType = std::remove_reference_t< decltype( *std::begin( std::declval< T& >() ) ) >; public: using type = ArrayType< internalType, sizeof( T ) / sizeof( internalType ) >; };
+
+	template< class T >
+	const typename type_of< T >::type& GetTypeInstanceOf()
+	{
+		return type_of< T >::type::GetInstance();
+	}
 }
 #pragma endregion
 
@@ -85,9 +141,9 @@ namespace rtti
 		void GetTypes( std::vector< const Type* >& outTypes ) const
 		{
 			outTypes.reserve( m_types.size() );
-			for ( const auto& [id, type] : m_types )
+			for ( const auto& entry : m_types )
 			{
-				outTypes.emplace_back( type.get() );
+				outTypes.emplace_back( entry.second.get() );
 			}
 		}
 
@@ -881,56 +937,4 @@ RTTI_DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( unsigned )
 RTTI_DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( unsigned long long )
 RTTI_DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( double )
 RTTI_DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( __int8 )
-#pragma endregion
-
-#pragma region TypeOf
-namespace rtti
-{
-	namespace internal
-	{
-		template <typename> struct is_template : std::false_type {};
-
-		template <template <typename...> class Tmpl, typename ...Args>
-		struct is_template<Tmpl<Args...>> : std::true_type {};
-
-		template< class T >
-		struct is_vector : std::false_type {};
-
-		template< class T >
-		struct is_vector< std::vector< T > > : std::true_type {};
-
-		template<class T>
-		struct is_array : std::false_type {};
-
-		template<class T, std::size_t N>
-		struct is_array<T[ N ]> : std::true_type {};
-
-		template<class T, std::size_t N>
-		struct is_array< std::array< T, N > > : std::true_type {};
-	}
-
-	template< class T, class T2 = void >
-	struct type_of {};
-
-	template< class T >
-	struct type_of< T, std::enable_if_t< std::is_class_v< T > && !internal::is_template< T >::value && !internal::is_array< T >::value > > { using type = T::Type; };
-
-	template< class T >
-	struct type_of< T, std::enable_if_t< std::is_fundamental_v< T > > > { using type = PrimitiveType< T >; };
-
-	template< class T >
-	struct type_of< T, std::enable_if_t< std::is_pointer_v< T > > > { using type = PointerType< std::remove_const_t< std::remove_pointer_t< T > > >; };
-
-	template< class T >
-	struct type_of< T, std::enable_if_t< internal::is_vector< T >::value > > { using type = VectorType< typename T::value_type >; };
-
-	template< class T >
-	struct type_of< T, std::enable_if_t< internal::is_array< T >::value > >{ private: using internalType = std::remove_reference_t< decltype( *std::begin( std::declval< T& >() ) ) >; public: using type = ArrayType< internalType, sizeof( T ) / sizeof( internalType ) >; };
-
-	template< class T >
-	const typename type_of< T >::type& GetTypeInstanceOf()
-	{
-		return type_of< T >::type::GetInstance();
-	}
-}
 #pragma endregion
