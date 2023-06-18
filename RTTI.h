@@ -27,6 +27,7 @@
 #include <unordered_map>
 #include <memory>
 #include <type_traits>
+#include <array>
 
 #ifndef RTTI_REQUIRE_MOVE_CTOR
 #define RTTI_REQUIRE_MOVE_CTOR 1
@@ -314,8 +315,6 @@ namespace rtti
 			return FindProperty( internal::CalcHash( name ) );
 		}
 
-		static constexpr bool c_inherits = false;
-
 	protected:
 		Type( const char* name )
 			: Type( internal::CalcHash( name ) )
@@ -432,7 +431,6 @@ public: \
 				return m_properties[ index - ParentClassType::GetPropertiesAmountStatic() ].get(); \
 			} \
 		} \
-	static constexpr bool c_inherits = Inherits ; \
 	protected: \
 		RTTI_INTERNAL_VIRTUAL_##Virtual ClassName##* Construct_Internal() const \
 		{ \
@@ -617,7 +615,10 @@ namespace rtti
 	};
 
 	template< class T >
-	class PointerType< T, std::enable_if_t< T::Type::c_inherits > > : public PointerType< typename T::Super >
+	struct get_void { using type = void; };
+
+	template< class T >
+	class PointerType< T, typename get_void< typename T::Super >::type > : public PointerType< typename T::Super >
 	{
 		RTTI_INTERNAL_POINTER_TYPE_COMMON_BODY( PointerType< typename T::Super > );
 	};
@@ -634,6 +635,103 @@ namespace rtti
 		virtual const Type& GetInternalType() const = 0;
 	};
 }
+#pragma endregion
+
+#pragma region ArrayType
+namespace rtti
+{
+	template< class T, size_t Count >
+	class ArrayType : public ContainerType
+	{
+		friend class ::rtti::RTTI;
+
+	public:
+		static TypeId CalcId()
+		{
+			TypeId id = internal::CalcHash( GetInternalTypeStatic().GetName() );
+			id = internal::CalcHash( "[", id );
+			id = internal::CalcHash( std::to_string( Count ).c_str(), id );
+			return internal::CalcHash( "]", id );
+		}
+
+		static const ArrayType& GetInstance()
+		{
+			return ::rtti::RTTI::GetMutable().GetOrRegisterType< ArrayType >();
+		}
+
+		static const Type& GetInternalTypeStatic()
+		{
+			return GetTypeInstanceOf< T >();
+		}
+
+		virtual const PointerType< T[ Count ] >& GetPointerType() const override
+		{
+			return GetTypeInstanceOf< T (*)[ Count ] >();
+		}
+
+		const Type& GetInternalType() const override
+		{
+			return GetInternalTypeStatic();
+		}
+
+		const char* GetName() const override
+		{
+			return m_name.c_str();
+		}
+
+		void ConstructInPlace( void* dest ) const override
+		{
+			T* arr = static_cast< T* >( dest );
+
+			for ( size_t i = 0u; i < Count; ++i )
+			{
+				GetInternalType().ConstructInPlace( &arr[ i ] );
+			}
+		}
+
+#if RTTI_REQUIRE_MOVE_CTOR
+		virtual void MoveInPlace( void* dest, void* src ) const override
+		{
+			T* destArr = new ( dest ) T[ Count ];
+			T* sourceArr = static_cast< T* >( src );
+
+			for ( size_t i = 0u; i < Count; ++i )
+			{
+				GetInternalType().MoveInPlace( &destArr[ i ], &sourceArr[ i ] );
+			}
+		}
+#endif
+
+		void Destroy( void* ptr ) const override
+		{
+			T* arr = static_cast< T* >( ptr );
+
+			for ( size_t i = 0u; i < Count; ++i )
+			{
+				GetInternalType().Destroy( &arr[ i ] );
+			}
+		}
+
+		size_t GetSize() const override
+		{
+			return sizeof( T ) * Count;
+		}
+
+	private:
+		ArrayType()
+			: ContainerType( CalcId() )
+		{
+			m_name.reserve( strlen( GetInternalType().GetName() ) + 10 );
+			m_name += GetInternalType().GetName();
+			m_name += "[";
+			m_name += std::to_string( Count );
+			m_name += "]";
+		}
+
+		std::string m_name;
+	};
+}
+
 #pragma endregion
 
 #pragma region VectorType
@@ -657,7 +755,7 @@ namespace rtti
 
 		static const VectorType< T >& GetInstance()
 		{
-			return ::rtti::RTTI::GetMutable().GetOrRegisterType< VectorType< T > >();
+			return ::rtti::RTTI::GetMutable().GetOrRegisterType< VectorType >();
 		}
 
 		static const Type& GetInternalTypeStatic()
@@ -705,8 +803,12 @@ namespace rtti
 	private:
 		VectorType()
 			: ContainerType( CalcId() )
-			, m_name( std::string( c_namePrefix ) + GetInternalType().GetName() + c_namePostfix )
-		{}
+		{
+			m_name.reserve( ( sizeof( c_namePrefix ) / sizeof( char ) ) + strlen( GetInternalType().GetName() ) + ( sizeof(c_namePostfix) / sizeof( char ) ) );
+			m_name += c_namePrefix;
+			m_name += GetInternalType().GetName();
+			m_name += c_namePrefix;
+		}
 
 		std::string m_name;
 	};
@@ -796,13 +898,22 @@ namespace rtti
 
 		template< class T >
 		struct is_vector< std::vector< T > > : std::true_type {};
+
+		template<class T>
+		struct is_array : std::false_type {};
+
+		template<class T, std::size_t N>
+		struct is_array<T[ N ]> : std::true_type {};
+
+		template<class T, std::size_t N>
+		struct is_array< std::array< T, N > > : std::true_type {};
 	}
 
 	template< class T, class T2 = void >
 	struct type_of {};
 
 	template< class T >
-	struct type_of< T, std::enable_if_t< std::is_class_v< T > && !internal::is_template< T >::value > > { using type = T::Type; };
+	struct type_of< T, std::enable_if_t< std::is_class_v< T > && !internal::is_template< T >::value && !internal::is_array< T >::value > > { using type = T::Type; };
 
 	template< class T >
 	struct type_of< T, std::enable_if_t< std::is_fundamental_v< T > > > { using type = PrimitiveType< T >; };
@@ -812,6 +923,9 @@ namespace rtti
 
 	template< class T >
 	struct type_of< T, std::enable_if_t< internal::is_vector< T >::value > > { using type = VectorType< typename T::value_type >; };
+
+	template< class T >
+	struct type_of< T, std::enable_if_t< internal::is_array< T >::value > >{ private: using internalType = std::remove_reference_t< decltype( *std::begin( std::declval< T& >() ) ) >; public: using type = ArrayType< internalType, sizeof( T ) / sizeof( internalType ) >; };
 
 	template< class T >
 	const typename type_of< T >::type& GetTypeInstanceOf()
