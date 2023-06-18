@@ -28,11 +28,23 @@
 #define RTTI_REQUIRE_MOVE_CTOR 1
 #endif
 
+#ifndef RTTI_CREATE_STD_VECTOR_TYPE
+#define RTTI_CREATE_STD_VECTOR_TYPE 1
+#endif
+
+#ifndef RTTI_CREATE_STD_SET_TYPE
+#define RTTI_CREATE_STD_SET_TYPE 1
+#endif
+
 #include <vector>
 #include <unordered_map>
 #include <memory>
 #include <type_traits>
 #include <string>
+
+#if RTTI_CREATE_STD_SET_TYPE
+#include <unordered_set>
+#endif
 
 #pragma region ForwardDeclarations
 namespace rtti
@@ -40,6 +52,7 @@ namespace rtti
 class Type;
 template< class T, class T2 = void > class PointerType;
 template< class T > class VectorType;
+template< class T > class SetType;
 template< class T, size_t Count > class ArrayType;
 template< class T > class PrimitiveType;
 using TypeId = size_t;
@@ -61,6 +74,14 @@ namespace rtti
 
 		template< class T >
 		struct is_vector< std::vector< T > > : std::true_type {};
+
+#if RTTI_CREATE_STD_SET_TYPE
+		template< class T >
+		struct is_set : std::false_type {};
+
+		template< class T >
+		struct is_set< std::unordered_set< T > > : std::true_type {};
+#endif
 
 		template<class T>
 		struct is_array : std::false_type {};
@@ -84,8 +105,15 @@ namespace rtti
 	template< class T >
 	struct type_of< T, std::enable_if_t< std::is_pointer_v< T > > > { using type = PointerType< std::remove_const_t< std::remove_pointer_t< T > > >; };
 
+#if RTTI_CREATE_STD_VECTOR_TYPE
 	template< class T >
 	struct type_of< T, std::enable_if_t< internal::is_vector< T >::value > > { using type = VectorType< typename T::value_type >; };
+#endif
+
+#if RTTI_CREATE_STD_SET_TYPE
+	template< class T >
+	struct type_of< T, std::enable_if_t< internal::is_set< T >::value > > { using type = SetType< typename T::value_type >; };
+#endif
 
 	template< class T >
 	struct type_of< T, std::enable_if_t< internal::is_array< T >::value > >{ private: using internalType = std::remove_reference_t< decltype( *std::begin( std::declval< T& >() ) ) >; public: using type = ArrayType< internalType, sizeof( T ) / sizeof( internalType ) >; };
@@ -690,7 +718,82 @@ namespace rtti
 		using Type::Type;
 		virtual const Type& GetInternalType() const = 0;
 	};
+
+	namespace internal
+	{
+		template< class T, class TContainer, class ContainerTrueType >
+		class DynamicContainerCommon : public ContainerType
+		{
+			friend class ::rtti::RTTI;
+
+		public:
+			static TypeId CalcId()
+			{
+				TypeId id = internal::CalcHash( TContainer::c_baseName );
+				id = internal::CalcHash( "< ", id );
+				id = internal::CalcHash( GetInternalTypeStatic().GetName(), id );
+				return internal::CalcHash( " >", id );
+			}
+
+			static const TContainer& GetInstance()
+			{
+				return ::rtti::RTTI::GetMutable().GetOrRegisterType< TContainer >();
+			}
+
+			static const Type& GetInternalTypeStatic()
+			{
+				return GetTypeInstanceOf< T >();
+			}
+
+			virtual const PointerType< ContainerTrueType >& GetPointerType() const override
+			{
+				return GetTypeInstanceOf< ContainerTrueType* >();
+			}
+
+			virtual const Type& GetInternalType() const override
+			{
+				return GetInternalTypeStatic();
+			}
+
+			virtual const char* GetName() const override
+			{
+				return m_name.c_str();
+			}
+
+			virtual void ConstructInPlace( void* dest ) const override
+			{
+				*static_cast< ContainerTrueType* >( dest ) = ContainerTrueType();
+			}
+
+#if RTTI_REQUIRE_MOVE_CTOR
+			virtual void MoveInPlace( void* dest, void* src ) const override
+			{
+				new ( dest ) ContainerTrueType( std::move( *static_cast< ContainerTrueType* >( src ) ) );
+			}
+#endif
+
+			virtual size_t GetSize() const override
+			{
+				return sizeof( ContainerTrueType );
+			}
+
+		protected:
+			DynamicContainerCommon()
+				: ::rtti::ContainerType( CalcId() )
+			{
+				m_name.reserve( ( sizeof( TContainer::c_baseName ) / sizeof( char ) ) + strlen( GetInternalType().GetName() ) + 4 );
+				m_name += TContainer::c_baseName;
+				m_name += "< ";
+				m_name += GetInternalType().GetName();
+				m_name += " >";
+			}
+
+		private:
+			std::string m_name;
+		};
+	}
 }
+
 #pragma endregion
 
 #pragma region ArrayType
@@ -791,84 +894,41 @@ namespace rtti
 #pragma endregion
 
 #pragma region VectorType
+#if RTTI_CREATE_STD_VECTOR_TYPE
 namespace rtti
 {
 	template< class T >
-	class VectorType : public ContainerType
+	class VectorType : public internal::DynamicContainerCommon< T, VectorType< T >, std::vector< T > >
 	{
-		friend class ::rtti::RTTI;
-
-		static constexpr const char* c_namePrefix = "Vector< ";
-		static constexpr const char* c_namePostfix = " >";
-
 	public:
-		static TypeId CalcId()
-		{
-			TypeId id = internal::CalcHash( c_namePrefix );
-			id = internal::CalcHash( GetInternalTypeStatic().GetName(), id );
-			return internal::CalcHash( c_namePostfix, id );
-		}
-
-		static const VectorType< T >& GetInstance()
-		{
-			return ::rtti::RTTI::GetMutable().GetOrRegisterType< VectorType >();
-		}
-
-		static const Type& GetInternalTypeStatic()
-		{
-			return GetTypeInstanceOf< T >();
-		}
-
-		virtual const PointerType< std::vector< T > >& GetPointerType() const override
-		{
-			return GetTypeInstanceOf< std::vector< T >* >();
-		}
-
-		virtual const Type& GetInternalType() const override
-		{
-			return GetInternalTypeStatic();
-		}
-
-		virtual const char* GetName() const override
-		{
-			return m_name.c_str();
-		}
-
-		virtual void ConstructInPlace( void* dest ) const override
-		{
-			*static_cast< std::vector< T >* >( dest ) = std::vector< T >();
-		}
-
-#if RTTI_REQUIRE_MOVE_CTOR
-		virtual void MoveInPlace( void* dest, void* src ) const override
-		{
-			new ( dest ) std::vector< T >( std::move( *static_cast< std::vector< T >* >( src ) ) );
-		}
-#endif
+		static constexpr const char* c_baseName = "Vector";
 
 		virtual void Destroy( void* ptr ) const override
 		{
 			static_cast< std::vector< T >* >( ptr )->~vector< T >();
 		}
-
-		virtual size_t GetSize() const override
-		{
-			return sizeof( std::vector< T > );
-		}
-
-	private:
-		VectorType()
-			: ContainerType( CalcId() )
-		{
-			m_name.reserve( ( sizeof( c_namePrefix ) / sizeof( char ) ) + strlen( GetInternalType().GetName() ) + ( sizeof(c_namePostfix) / sizeof( char ) ) );
-			m_name += c_namePrefix;
-			m_name += GetInternalType().GetName();
-			m_name += c_namePrefix;
-		}
-
-		std::string m_name;
 	};
 }
+#endif
+#pragma endregion
+
+#pragma region SetType
+#if RTTI_CREATE_STD_SET_TYPE
+namespace rtti
+{
+	template< class T >
+	class SetType : public internal::DynamicContainerCommon< T, SetType< T >, std::unordered_set< T > >
+	{
+	public:
+		static constexpr const char* c_baseName = "Set";
+
+		virtual void Destroy( void* ptr ) const override
+		{
+			static_cast< std::unordered_set< T >* >( ptr )->~unordered_set< T >();
+		}
+	};
+}
+#endif
 #pragma endregion
 
 #pragma region Primitives
