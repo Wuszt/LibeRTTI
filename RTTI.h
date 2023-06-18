@@ -709,6 +709,75 @@ namespace rtti
 }
 #pragma endregion
 
+#pragma region TemplateType
+namespace rtti
+{
+	namespace internal
+	{
+		template< class DerivedType, class TrueType, class ParentType >
+		class TemplateType : public ParentType
+		{
+			friend class ::rtti::RTTI;
+
+		public:
+			static TypeId CalcId()
+			{
+				TypeId id = internal::CalcHash( DerivedType::GetBaseName() );
+				id = internal::CalcHash( "< ", id );
+				id = internal::CalcHash( DerivedType::GetInternalTypeStatic().GetName(), id );
+				return internal::CalcHash( " >", id );
+			}
+
+			static const DerivedType& GetInstance()
+			{
+				return ::rtti::RTTI::GetMutable().GetOrRegisterType< DerivedType >();
+			}
+
+			virtual const PointerType< TrueType >& GetPointerType() const override
+			{
+				return GetTypeInstanceOf< TrueType* >();
+			}
+
+			virtual const char* GetName() const override
+			{
+				return m_name.c_str();
+			}
+
+			virtual void ConstructInPlace( void* dest ) const override
+			{
+				*static_cast< TrueType* >( dest ) = TrueType();
+			}
+
+#if RTTI_REQUIRE_MOVE_CTOR
+			virtual void MoveInPlace( void* dest, void* src ) const override
+			{
+				new ( dest ) TrueType( std::move( *static_cast< TrueType* >( src ) ) );
+			}
+#endif
+
+			virtual size_t GetSize() const override
+			{
+				return sizeof( TrueType );
+			}
+
+		protected:
+			TemplateType()
+				: ParentType( CalcId() )
+			{
+				m_name.reserve( strlen( DerivedType::GetBaseName() ) + strlen( DerivedType::GetInternalTypeStatic().GetName() ) + 4 );
+				m_name += DerivedType::GetBaseName();
+				m_name += "< ";
+				m_name += DerivedType::GetInternalTypeStatic().GetName();
+				m_name += " >";
+			}
+
+		private:
+			std::string m_name;
+		};
+	}
+}
+#pragma endregion
+
 #pragma region ContainerType
 namespace rtti
 {
@@ -721,79 +790,22 @@ namespace rtti
 
 	namespace internal
 	{
-		template< class T, class TContainer, class ContainerTrueType >
-		class DynamicContainerCommon : public ContainerType
+		template< class T, class DerivedType, class TrueType >
+		class DynamicContainerTemplateType : public TemplateType< DerivedType, TrueType, ContainerType >
 		{
-			friend class ::rtti::RTTI;
-
 		public:
-			static TypeId CalcId()
-			{
-				TypeId id = internal::CalcHash( TContainer::c_baseName );
-				id = internal::CalcHash( "< ", id );
-				id = internal::CalcHash( GetInternalTypeStatic().GetName(), id );
-				return internal::CalcHash( " >", id );
-			}
-
-			static const TContainer& GetInstance()
-			{
-				return ::rtti::RTTI::GetMutable().GetOrRegisterType< TContainer >();
-			}
-
-			static const Type& GetInternalTypeStatic()
+			static const typename type_of< T >::type& GetInternalTypeStatic()
 			{
 				return GetTypeInstanceOf< T >();
 			}
 
-			virtual const PointerType< ContainerTrueType >& GetPointerType() const override
-			{
-				return GetTypeInstanceOf< ContainerTrueType* >();
-			}
-
-			virtual const Type& GetInternalType() const override
+			virtual const typename type_of< T >::type& GetInternalType() const override
 			{
 				return GetInternalTypeStatic();
 			}
-
-			virtual const char* GetName() const override
-			{
-				return m_name.c_str();
-			}
-
-			virtual void ConstructInPlace( void* dest ) const override
-			{
-				*static_cast< ContainerTrueType* >( dest ) = ContainerTrueType();
-			}
-
-#if RTTI_REQUIRE_MOVE_CTOR
-			virtual void MoveInPlace( void* dest, void* src ) const override
-			{
-				new ( dest ) ContainerTrueType( std::move( *static_cast< ContainerTrueType* >( src ) ) );
-			}
-#endif
-
-			virtual size_t GetSize() const override
-			{
-				return sizeof( ContainerTrueType );
-			}
-
-		protected:
-			DynamicContainerCommon()
-				: ::rtti::ContainerType( CalcId() )
-			{
-				m_name.reserve( ( sizeof( TContainer::c_baseName ) / sizeof( char ) ) + strlen( GetInternalType().GetName() ) + 4 );
-				m_name += TContainer::c_baseName;
-				m_name += "< ";
-				m_name += GetInternalType().GetName();
-				m_name += " >";
-			}
-
-		private:
-			std::string m_name;
 		};
 	}
 }
-
 #pragma endregion
 
 #pragma region ArrayType
@@ -898,10 +910,12 @@ namespace rtti
 namespace rtti
 {
 	template< class T >
-	class VectorType : public internal::DynamicContainerCommon< T, VectorType< T >, std::vector< T > >
+	class VectorType : public internal::DynamicContainerTemplateType< T, VectorType< T >, std::vector< T > >
 	{
 	public:
 		static constexpr const char* c_baseName = "Vector";
+
+		static constexpr const char* GetBaseName() { return "Vector"; }
 
 		virtual void Destroy( void* ptr ) const override
 		{
@@ -917,10 +931,12 @@ namespace rtti
 namespace rtti
 {
 	template< class T >
-	class SetType : public internal::DynamicContainerCommon< T, SetType< T >, std::unordered_set< T > >
+	class SetType : public internal::DynamicContainerTemplateType< T, SetType< T >, std::unordered_set< T > >
 	{
 	public:
 		static constexpr const char* c_baseName = "Set";
+
+		static constexpr const char* GetBaseName() { return "Set"; }
 
 		virtual void Destroy( void* ptr ) const override
 		{
