@@ -651,10 +651,53 @@ RTTI_INTERNAL_REGISTER_TYPE( NamespaceClassName##::Type )
 
 namespace rtti
 {
-	template< class T = void, class T2 >
-	class PointerType : public PointerType< void >
+	namespace internal
 	{
-		RTTI_INTERNAL_POINTER_TYPE_COMMON_BODY( PointerType< void > );
+		template< class DerivedClass, class T, class ParentClass >
+		class PointerTypeImplementation : public ParentClass
+		{
+			friend class ::rtti::RTTI;
+			static constexpr const char* c_namePostfix = "*";
+		public:
+			static TypeId CalcId()
+			{
+				TypeId id = internal::CalcHash( GetInternalTypeStatic().GetName() );
+				return internal::CalcHash( c_namePostfix, id );
+			}
+
+			static const typename type_of< T >::type& GetInternalTypeStatic()
+			{
+				return GetTypeInstanceOf< T >();
+			}
+
+			virtual const typename type_of< T >::type& GetInternalType() const override
+			{
+				return GetInternalTypeStatic();
+			}
+
+			static const DerivedClass& GetInstance()
+			{
+				static const DerivedClass& s_typeInstance = ::rtti::RTTI::GetMutable().GetOrRegisterType< DerivedClass >();
+				return s_typeInstance;
+			}
+		protected:
+			PointerTypeImplementation()
+				: ParentClass( CalcId(), std::string( GetInternalTypeStatic().GetName() ) + c_namePostfix )
+			{}
+
+			PointerTypeImplementation( TypeId typeId, std::string&& name )
+				: ParentClass( typeId, std::move( name ) )
+			{}
+		};
+	}
+}
+
+namespace rtti
+{
+	template< class T = void, class T2 >
+	class PointerType : public internal::PointerTypeImplementation< PointerType< T >, T, PointerType< void > >
+	{
+		using internal::PointerTypeImplementation< PointerType< T >, T, PointerType< void > >::PointerTypeImplementation;
 	};
 
 	template<>
@@ -692,9 +735,9 @@ namespace rtti
 	struct get_void { using type = void; };
 
 	template< class T >
-	class PointerType< T, typename get_void< typename T::Super >::type > : public PointerType< typename T::Super >
+	class PointerType< T, typename get_void< typename T::Super >::type > : public internal::PointerTypeImplementation< PointerType< T >, T, PointerType< typename T::Super > >
 	{
-		RTTI_INTERNAL_POINTER_TYPE_COMMON_BODY( PointerType< typename T::Super > );
+		using internal::PointerTypeImplementation< PointerType< T >, T, PointerType< typename T::Super > >::PointerTypeImplementation;
 	};
 }
 #pragma endregion
