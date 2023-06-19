@@ -351,7 +351,7 @@ namespace rtti
 			return false;
 		}
 
-		virtual const PointerType< Type >& GetPointerType() const = 0;
+		virtual const PointerType< void >& GetPointerType() const = 0;
 
 		virtual void ConstructInPlace( void* dest ) const = 0;
 
@@ -661,14 +661,14 @@ RTTI_INTERNAL_REGISTER_TYPE( NamespaceClassName##::Type )
 
 namespace rtti
 {
-	template< class T = Type, class T2 >
-	class PointerType : public PointerType< Type >
+	template< class T = void, class T2 >
+	class PointerType : public PointerType< void >
 	{
-		RTTI_INTERNAL_POINTER_TYPE_COMMON_BODY( PointerType< Type > );
+		RTTI_INTERNAL_POINTER_TYPE_COMMON_BODY( PointerType< void > );
 	};
 
 	template<>
-	class PointerType< Type > : public Type
+	class PointerType< void > : public Type
 	{
 	public:
 		virtual const Type& GetInternalType() const = 0;
@@ -963,7 +963,7 @@ namespace rtti
 			*static_cast< T* >( dest ) = T();
 		}
 
-		virtual const PointerType< Type >& GetPointerType() const override
+		virtual const PointerType< void >& GetPointerType() const override
 		{
 			return GetTypeInstanceOf< T* >();
 		}
