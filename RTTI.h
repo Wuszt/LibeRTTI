@@ -619,36 +619,6 @@ RTTI_INTERNAL_REGISTER_TYPE( NamespaceClassName##::Type )
 #pragma endregion
 
 #pragma region PointerType
-#define RTTI_INTERNAL_POINTER_TYPE_COMMON_BODY(BaseClass) \
-	friend class ::rtti::RTTI; \
-	static constexpr const char* c_namePostfix = "*"; \
-	public: \
-		static TypeId CalcId() \
-		{ \
-			TypeId id = internal::CalcHash( GetInternalTypeStatic().GetName() ); \
-			return internal::CalcHash( c_namePostfix, id ); \
-		} \
-		static const Type& GetInternalTypeStatic() \
-		{ \
-			return GetTypeInstanceOf< T >(); \
-		} \
-		virtual const Type& GetInternalType() const override \
-		{ \
-			return GetInternalTypeStatic(); \
-		} \
-		static const PointerType& GetInstance() \
-		{ \
-			static const PointerType& s_typeInstance = ::rtti::RTTI::GetMutable().GetOrRegisterType< PointerType >(); \
-			return s_typeInstance; \
-		} \
-	protected: \
-		PointerType() \
-			: BaseClass( CalcId(), std::string( GetInternalTypeStatic().GetName() ) + c_namePostfix ) \
-		{} \
-		PointerType( TypeId typeId, std::string&& name ) \
-			: BaseClass( typeId, std::move( name ) ) \
-		{} \
-
 namespace rtti
 {
 	namespace internal
