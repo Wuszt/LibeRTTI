@@ -351,8 +351,6 @@ namespace rtti
 			return false;
 		}
 
-		virtual const PointerType< void >& GetPointerType() const = 0;
-
 		virtual void ConstructInPlace( void* dest ) const = 0;
 
 #if RTTI_REQUIRE_MOVE_CTOR
@@ -472,10 +470,6 @@ public: \
 		std::unique_ptr< ClassName > Construct() const \
 		{ \
 			return std::unique_ptr< ClassName >( Construct_Internal() ); \
-		} \
-		virtual const ::rtti::PointerType< ClassName >& GetPointerType() const override \
-		{ \
-			return ::rtti::GetTypeInstanceOf< std::add_pointer_t< ClassName > >(); \
 		} \
 		virtual void ConstructInPlace( void* dest ) const override \
 		{ \
@@ -647,10 +641,6 @@ RTTI_INTERNAL_REGISTER_TYPE( NamespaceClassName##::Type )
 			static const PointerType& s_typeInstance = ::rtti::RTTI::GetMutable().GetOrRegisterType< PointerType >(); \
 			return s_typeInstance; \
 		} \
-		virtual const PointerType< T >& GetPointerType() const override \
-		{ \
-			return GetTypeInstanceOf< T* >(); \
-		} \
 	protected: \
 		PointerType() \
 			: BaseClass( CalcId(), std::string( GetInternalTypeStatic().GetName() ) + c_namePostfix ) \
@@ -731,11 +721,6 @@ namespace rtti
 			static const DerivedType& GetInstance()
 			{
 				return ::rtti::RTTI::GetMutable().GetOrRegisterType< DerivedType >();
-			}
-
-			virtual const PointerType< TrueType >& GetPointerType() const override
-			{
-				return GetTypeInstanceOf< TrueType* >();
 			}
 
 			virtual const char* GetName() const override
@@ -833,11 +818,6 @@ namespace rtti
 		static const Type& GetInternalTypeStatic()
 		{
 			return GetTypeInstanceOf< T >();
-		}
-
-		virtual const PointerType< T[ Count ] >& GetPointerType() const override
-		{
-			return GetTypeInstanceOf< T (*)[ Count ] >();
 		}
 
 		const Type& GetInternalType() const override
@@ -961,11 +941,6 @@ namespace rtti
 		virtual void ConstructInPlace( void* dest ) const
 		{
 			*static_cast< T* >( dest ) = T();
-		}
-
-		virtual const PointerType< void >& GetPointerType() const override
-		{
-			return GetTypeInstanceOf< T* >();
 		}
 
 #if RTTI_REQUIRE_MOVE_CTOR
