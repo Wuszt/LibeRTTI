@@ -40,6 +40,11 @@
 #define RTTI_CREATE_STD_PAIR_TYPE 1
 #endif
 
+#ifndef RTTI_CREATE_STD_MAP_TYPE
+#define RTTI_CREATE_STD_MAP_TYPE 1
+#endif
+
+#pragma region Includes
 #include <vector>
 #include <unordered_map>
 #include <memory>
@@ -47,7 +52,7 @@
 #include <string>
 #include <array>
 
-#if RTTI_CREATE_STD_PAIR_TYPE
+#if RTTI_CREATE_STD_PAIR_TYPE || RTTI_CREATE_STD_MAP_TYPE
 #include <utility>
 #endif
 
@@ -55,17 +60,27 @@
 #include <unordered_set>
 #endif
 
+#if RTTI_CREATE_STD_MAP_TYPE
+#include <unordered_map>
+#endif
+#pragma endregion
+
 #pragma region ForwardDeclarations
 namespace rtti
 {
-class Type;
-template< class T, class T2 = void > class PointerType;
-template< class T > class VectorType;
-template< class T > class SetType;
-template< class T, size_t Count > class ArrayType;
-template< class T > class PrimitiveType;
-template< class T1, class T2 > class PairType;
-using TypeId = size_t;
+	class Type;
+	template< class T, class T2 = void > class PointerType;
+	template< class T > class VectorType;
+	template< class T > class SetType;
+	template< class T1, class T2 > class MapType;
+	template< class T, size_t Count > class ArrayType;
+	template< class T > class PrimitiveType;
+	using TypeId = size_t;
+
+	namespace internal
+	{
+		template< class T1, class T2 > class PairType;
+	}
 }
 #pragma endregion
 
@@ -99,6 +114,14 @@ namespace rtti
 
 		template< class T1, class T2 >
 		struct is_pair< std::pair< T1, T2 > > : std::true_type {};
+#endif
+
+#if RTTI_CREATE_STD_MAP_TYPE
+		template< class T >
+		struct is_map : std::false_type {};
+
+		template< class T1, class T2 >
+		struct is_map< std::unordered_map< T1, T2 > > : std::true_type {};
 #endif
 
 		template<class T>
@@ -135,7 +158,12 @@ namespace rtti
 
 #if RTTI_CREATE_STD_PAIR_TYPE
 	template< class T >
-	struct type_of< T, std::enable_if_t< internal::is_pair< T >::value > > { using type = PairType< typename T::first_type, typename T::second_type >; };
+	struct type_of< T, std::enable_if_t< internal::is_pair< T >::value > > { using type = internal::PairType< typename T::first_type, typename T::second_type >; };
+#endif
+
+#if RTTI_CREATE_STD_MAP_TYPE
+	template< class T >
+	struct type_of< T, std::enable_if_t< internal::is_map< T >::value > > { using type = MapType< typename T::key_type, typename T::mapped_type >; };
 #endif
 
 	template< class T >
@@ -764,7 +792,8 @@ namespace rtti
 
 			static const DerivedType& GetInstance()
 			{
-				return ::rtti::RTTI::GetMutable().GetOrRegisterType< DerivedType >();
+				static const DerivedType& s_typeInstance = ::rtti::RTTI::GetMutable().GetOrRegisterType< DerivedType >();
+				return s_typeInstance;
 			}
 
 			virtual const char* GetName() const override
@@ -822,39 +851,58 @@ namespace rtti
 #pragma endregion
 
 #pragma region PairType
-#if RTTI_CREATE_STD_PAIR_TYPE
+#if RTTI_CREATE_STD_PAIR_TYPE || RTTI_CREATE_STD_MAP_TYPE
 namespace rtti
 {
-	template< class T1, class T2 >
-	class PairType : public internal::TemplateType< PairType< T1, T2 >, std::pair< T1, T2 >, Type >
+	namespace internal
 	{
-		friend class ::rtti::RTTI;
-		friend class internal::TemplateType< PairType< T1, T2 >, std::pair< T1, T2 >, Type >;
-
-	public:
-		static constexpr const char* GetBaseName() { return "Pair"; }
-
-		static const typename type_of< T1 >::type& GetFirstInternalTypeStatic()
+		template< class T1, class T2 >
+		class PairType : public internal::TemplateType< PairType< T1, T2 >, std::pair< T1, T2 >, Type >
 		{
-			return GetTypeInstanceOf< T1 >();
-		}
+			friend class ::rtti::RTTI;
+			friend class internal::TemplateType< PairType< T1, T2 >, std::pair< T1, T2 >, Type >;
+			friend class MapType< T1, T2 >;
 
-		static const typename type_of< T2 >::type& GetSecondInternalTypeStatic()
-		{
-			return GetTypeInstanceOf< T2 >();
-		}
+		public:
+			static constexpr const char* GetBaseName() { return "Pair"; }
 
-		virtual void Destroy( void* ptr ) const override
-		{
-			static_cast< std::pair< T1, T2 >* >( ptr )->~pair< T1, T2 >();
-		}
+			static const typename type_of< T1 >::type& GetFirstInternalTypeStatic()
+			{
+				return GetTypeInstanceOf< T1 >();
+			}
 
-	private:
-		static std::array<const Type*, 2> GetInternalTypesStatic()
-		{
-			return { &GetFirstInternalTypeStatic(), &GetSecondInternalTypeStatic() };
-		}
-	};
+			static const typename type_of< T2 >::type& GetSecondInternalTypeStatic()
+			{
+				return GetTypeInstanceOf< T2 >();
+			}
+
+			const typename type_of< T1 >::type& GetFirstInternalType() const
+			{
+				return GetFirstInternalTypeStatic();
+			}
+
+			const typename type_of< T2 >::type& GetSecondInternalType() const
+			{
+				return GetSecondInternalTypeStatic();
+			}
+
+			virtual void Destroy( void* ptr ) const override
+			{
+				static_cast< std::pair< T1, T2 >* >( ptr )->~pair< T1, T2 >();
+			}
+
+		private:
+			static std::array<const Type*, 2> GetInternalTypesStatic()
+			{
+				return { &GetFirstInternalTypeStatic(), &GetSecondInternalTypeStatic() };
+			}
+		};
+	}
+
+	#if RTTI_CREATE_STD_PAIR_TYPE
+	template< class T1, class T2 >
+	using PairType = internal::PairType< T1, T2 >;
+	#endif
 }
 #endif
 #pragma endregion
@@ -873,20 +921,20 @@ namespace rtti
 
 	namespace internal
 	{
-		template< class T, class DerivedType, class TrueType >
+		template< class InternalType, class DerivedType, class TrueType >
 		class DynamicContainerTemplateType : public TemplateType< DerivedType, TrueType, ContainerType >
 		{
 			friend class TemplateType< DerivedType, TrueType, ContainerType >;
 
 		public:
-			static const typename type_of< T >::type& GetInternalTypeStatic()
+			static const InternalType& GetInternalTypeStatic()
 			{
-				return GetTypeInstanceOf< T >();
+				return InternalType::GetInstance();
 			}
 
-			virtual const typename type_of< T >::type& GetInternalType() const override
+			virtual const InternalType& GetInternalType() const override
 			{
-				return GetInternalTypeStatic();
+				return InternalType::GetInstance();
 			}
 
 		private:
@@ -996,7 +1044,7 @@ namespace rtti
 namespace rtti
 {
 	template< class T >
-	class VectorType : public internal::DynamicContainerTemplateType< T, VectorType< T >, std::vector< T > >
+	class VectorType : public internal::DynamicContainerTemplateType< typename type_of< T >::type, VectorType< T >, std::vector< T > >
 	{
 	public:
 		static constexpr const char* GetBaseName() { return "Vector"; }
@@ -1015,7 +1063,7 @@ namespace rtti
 namespace rtti
 {
 	template< class T >
-	class SetType : public internal::DynamicContainerTemplateType< T, SetType< T >, std::unordered_set< T > >
+	class SetType : public internal::DynamicContainerTemplateType< typename type_of< T >::type, SetType< T >, std::unordered_set< T > >
 	{
 	public:
 		static constexpr const char* GetBaseName() { return "Set"; }
@@ -1027,6 +1075,31 @@ namespace rtti
 	};
 }
 #endif
+#pragma endregion
+
+#pragma region MapType
+namespace rtti
+{
+	template< class TKey, class TValue >
+	class MapType : public internal::DynamicContainerTemplateType< internal::PairType< TKey, TValue >, MapType< TKey, TValue >, std::unordered_map< TKey, TValue > >
+	{
+		friend class internal::TemplateType< MapType, std::unordered_map< TKey, TValue >, ContainerType >;
+
+	public:
+		static constexpr const char* GetBaseName() { return "Map"; }
+
+		virtual void Destroy( void* ptr ) const override
+		{
+			static_cast< std::unordered_map< TKey, TValue >* >( ptr )->~unordered_map< TKey, TValue >();
+		}
+
+	private:
+		static std::array<const Type*, 2> GetInternalTypesStatic()
+		{
+			return internal::PairType< TKey, TValue >::GetInternalTypesStatic();
+		}
+	};
+}
 #pragma endregion
 
 #pragma region Primitives
