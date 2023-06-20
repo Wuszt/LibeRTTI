@@ -36,11 +36,20 @@
 #define RTTI_CREATE_STD_SET_TYPE 1
 #endif
 
+#ifndef RTTI_CREATE_STD_PAIR_TYPE
+#define RTTI_CREATE_STD_PAIR_TYPE 1
+#endif
+
 #include <vector>
 #include <unordered_map>
 #include <memory>
 #include <type_traits>
 #include <string>
+#include <array>
+
+#if RTTI_CREATE_STD_PAIR_TYPE
+#include <utility>
+#endif
 
 #if RTTI_CREATE_STD_SET_TYPE
 #include <unordered_set>
@@ -55,6 +64,7 @@ template< class T > class VectorType;
 template< class T > class SetType;
 template< class T, size_t Count > class ArrayType;
 template< class T > class PrimitiveType;
+template< class T1, class T2 > class PairType;
 using TypeId = size_t;
 }
 #pragma endregion
@@ -81,6 +91,14 @@ namespace rtti
 
 		template< class T >
 		struct is_set< std::unordered_set< T > > : std::true_type {};
+#endif
+
+#if RTTI_CREATE_STD_PAIR_TYPE
+		template< class T >
+		struct is_pair : std::false_type {};
+
+		template< class T1, class T2 >
+		struct is_pair< std::pair< T1, T2 > > : std::true_type {};
 #endif
 
 		template<class T>
@@ -113,6 +131,11 @@ namespace rtti
 #if RTTI_CREATE_STD_SET_TYPE
 	template< class T >
 	struct type_of< T, std::enable_if_t< internal::is_set< T >::value > > { using type = SetType< typename T::value_type >; };
+#endif
+
+#if RTTI_CREATE_STD_PAIR_TYPE
+	template< class T >
+	struct type_of< T, std::enable_if_t< internal::is_pair< T >::value > > { using type = PairType< typename T::first_type, typename T::second_type >; };
 #endif
 
 	template< class T >
@@ -712,7 +735,7 @@ namespace rtti
 }
 #pragma endregion
 
-#pragma region TemplateType
+#pragma region InternalTemplateType
 namespace rtti
 {
 	namespace internal
@@ -727,7 +750,15 @@ namespace rtti
 			{
 				TypeId id = internal::CalcHash( DerivedType::GetBaseName() );
 				id = internal::CalcHash( "< ", id );
-				id = internal::CalcHash( DerivedType::GetInternalTypeStatic().GetName(), id );
+				const auto internalTypes = DerivedType::GetInternalTypesStatic();
+				id = internal::CalcHash( internalTypes[0u]->GetName(), id);
+
+				for ( size_t i = 1u; i < internalTypes.size(); ++i )
+				{
+					id = internal::CalcHash( ", ", id);
+					id = internal::CalcHash( internalTypes[ i ]->GetName(), id);
+				}
+
 				return internal::CalcHash( " >", id );
 			}
 
@@ -762,10 +793,24 @@ namespace rtti
 			TemplateType()
 				: ParentType( CalcId() )
 			{
-				m_name.reserve( strlen( DerivedType::GetBaseName() ) + strlen( DerivedType::GetInternalTypeStatic().GetName() ) + 4 );
+				size_t internalTypesNamesLength = 0u;
+				const auto internalTypes = DerivedType::GetInternalTypesStatic();
+				for ( const auto* type : internalTypes )
+				{
+					internalTypesNamesLength += strlen(type->GetName());
+				}
+
+				m_name.reserve( strlen( DerivedType::GetBaseName() ) + internalTypesNamesLength + ( internalTypes.size() - 1 ) * 2u + 4u);
 				m_name += DerivedType::GetBaseName();
 				m_name += "< ";
-				m_name += DerivedType::GetInternalTypeStatic().GetName();
+				m_name += internalTypes[ 0u ]->GetName();
+
+				for ( size_t i = 1u; i < internalTypes.size(); ++i )
+				{
+					m_name += ", ";
+					m_name += internalTypes[ i ]->GetName();
+				}
+
 				m_name += " >";
 			}
 
@@ -776,14 +821,54 @@ namespace rtti
 }
 #pragma endregion
 
+#pragma region PairType
+#if RTTI_CREATE_STD_PAIR_TYPE
+namespace rtti
+{
+	template< class T1, class T2 >
+	class PairType : public internal::TemplateType< PairType< T1, T2 >, std::pair< T1, T2 >, Type >
+	{
+		friend class ::rtti::RTTI;
+		friend class internal::TemplateType< PairType< T1, T2 >, std::pair< T1, T2 >, Type >;
+
+	public:
+		static constexpr const char* GetBaseName() { return "Pair"; }
+
+		static const typename type_of< T1 >::type& GetFirstInternalTypeStatic()
+		{
+			return GetTypeInstanceOf< T1 >();
+		}
+
+		static const typename type_of< T2 >::type& GetSecondInternalTypeStatic()
+		{
+			return GetTypeInstanceOf< T2 >();
+		}
+
+		virtual void Destroy( void* ptr ) const override
+		{
+			static_cast< std::pair< T1, T2 >* >( ptr )->~pair< T1, T2 >();
+		}
+
+	private:
+		static std::array<const Type*, 2> GetInternalTypesStatic()
+		{
+			return { &GetFirstInternalTypeStatic(), &GetSecondInternalTypeStatic() };
+		}
+	};
+}
+#endif
+#pragma endregion
+
 #pragma region ContainerType
 namespace rtti
 {
 	class ContainerType : public Type
 	{
 	public:
-		using Type::Type;
 		virtual const Type& GetInternalType() const = 0;
+
+	protected:
+		using Type::Type;
 	};
 
 	namespace internal
@@ -791,6 +876,8 @@ namespace rtti
 		template< class T, class DerivedType, class TrueType >
 		class DynamicContainerTemplateType : public TemplateType< DerivedType, TrueType, ContainerType >
 		{
+			friend class TemplateType< DerivedType, TrueType, ContainerType >;
+
 		public:
 			static const typename type_of< T >::type& GetInternalTypeStatic()
 			{
@@ -800,6 +887,12 @@ namespace rtti
 			virtual const typename type_of< T >::type& GetInternalType() const override
 			{
 				return GetInternalTypeStatic();
+			}
+
+		private:
+			static std::array<const Type*, 1> GetInternalTypesStatic()
+			{
+				return { &GetInternalTypeStatic() };
 			}
 		};
 	}
@@ -906,8 +999,6 @@ namespace rtti
 	class VectorType : public internal::DynamicContainerTemplateType< T, VectorType< T >, std::vector< T > >
 	{
 	public:
-		static constexpr const char* c_baseName = "Vector";
-
 		static constexpr const char* GetBaseName() { return "Vector"; }
 
 		virtual void Destroy( void* ptr ) const override
@@ -927,8 +1018,6 @@ namespace rtti
 	class SetType : public internal::DynamicContainerTemplateType< T, SetType< T >, std::unordered_set< T > >
 	{
 	public:
-		static constexpr const char* c_baseName = "Set";
-
 		static constexpr const char* GetBaseName() { return "Set"; }
 
 		virtual void Destroy( void* ptr ) const override
