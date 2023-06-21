@@ -148,26 +148,26 @@ namespace rtti
 
 #if RTTI_CREATE_STD_VECTOR_TYPE
 	template< class T >
-	struct type_of< T, std::enable_if_t< internal::is_vector< T >::value > > { using type = VectorType< typename T::value_type >; };
+	struct type_of< T, std::enable_if_t< internal::is_vector< T >::value > > { using type = VectorType< std::remove_const_t< typename T::value_type > >; };
 #endif
 
 #if RTTI_CREATE_STD_SET_TYPE
 	template< class T >
-	struct type_of< T, std::enable_if_t< internal::is_set< T >::value > > { using type = SetType< typename T::value_type >; };
+	struct type_of< T, std::enable_if_t< internal::is_set< T >::value > > { using type = SetType< std::remove_const_t< typename T::value_type > >; };
 #endif
 
 #if RTTI_CREATE_STD_PAIR_TYPE
 	template< class T >
-	struct type_of< T, std::enable_if_t< internal::is_pair< T >::value > > { using type = internal::PairType< typename T::first_type, typename T::second_type >; };
+	struct type_of< T, std::enable_if_t< internal::is_pair< T >::value > > { using type = internal::PairType< std::remove_const_t< typename T::first_type >, std::remove_const_t< typename T::second_type > >; };
 #endif
 
 #if RTTI_CREATE_STD_MAP_TYPE
 	template< class T >
-	struct type_of< T, std::enable_if_t< internal::is_map< T >::value > > { using type = MapType< typename T::key_type, typename T::mapped_type >; };
+	struct type_of< T, std::enable_if_t< internal::is_map< T >::value > > { using type = MapType< std::remove_const_t< typename T::key_type >, std::remove_const_t< typename T::mapped_type > >; };
 #endif
 
 	template< class T >
-	struct type_of< T, std::enable_if_t< internal::is_array< T >::value > >{ private: using internalType = std::remove_reference_t< decltype( *std::begin( std::declval< T& >() ) ) >; public: using type = ArrayType< internalType, sizeof( T ) / sizeof( internalType ) >; };
+	struct type_of< T, std::enable_if_t< internal::is_array< T >::value > >{ private: using internalType = std::remove_reference_t< decltype( *std::begin( std::declval< T& >() ) ) >; public: using type = ArrayType< std::remove_const_t< internalType >, sizeof( T ) / sizeof( internalType ) >; };
 
 	template< class T >
 	const typename type_of< T >::type& GetTypeInstanceOf()
