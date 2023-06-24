@@ -28,20 +28,28 @@
 #define RTTI_REQUIRE_MOVE_CTOR 1
 #endif
 
-#ifndef RTTI_CREATE_STD_VECTOR_TYPE
-#define RTTI_CREATE_STD_VECTOR_TYPE 1
+#ifndef RTTI_CFG_CREATE_STD_VECTOR_TYPE
+#define RTTI_CFG_CREATE_STD_VECTOR_TYPE 1
 #endif
 
-#ifndef RTTI_CREATE_STD_SET_TYPE
-#define RTTI_CREATE_STD_SET_TYPE 1
+#ifndef RTTI_CFG_CREATE_STD_SET_TYPE
+#define RTTI_CFG_CREATE_STD_SET_TYPE 1
 #endif
 
-#ifndef RTTI_CREATE_STD_PAIR_TYPE
-#define RTTI_CREATE_STD_PAIR_TYPE 1
+#ifndef RTTI_CFG_CREATE_STD_PAIR_TYPE
+#define RTTI_CFG_CREATE_STD_PAIR_TYPE 1
 #endif
 
-#ifndef RTTI_CREATE_STD_MAP_TYPE
-#define RTTI_CREATE_STD_MAP_TYPE 1
+#ifndef RTTI_CFG_CREATE_STD_MAP_TYPE
+#define RTTI_CFG_CREATE_STD_MAP_TYPE 1
+#endif
+
+#ifndef RTTI_CFG_CREATE_STD_SHAREDPTR_TYPE
+#define RTTI_CFG_CREATE_STD_SHAREDPTR_TYPE 1
+#endif
+
+#ifndef RTTI_CFG_CREATE_STD_UNIQUEPTR_TYPE
+#define RTTI_CFG_CREATE_STD_UNIQUEPTR_TYPE 1
 #endif
 
 #pragma region Includes
@@ -52,15 +60,15 @@
 #include <string>
 #include <array>
 
-#if RTTI_CREATE_STD_PAIR_TYPE || RTTI_CREATE_STD_MAP_TYPE
+#if RTTI_CFG_CREATE_STD_PAIR_TYPE || RTTI_CFG_CREATE_STD_MAP_TYPE
 #include <utility>
 #endif
 
-#if RTTI_CREATE_STD_SET_TYPE
+#if RTTI_CFG_CREATE_STD_SET_TYPE
 #include <unordered_set>
 #endif
 
-#if RTTI_CREATE_STD_MAP_TYPE
+#if RTTI_CFG_CREATE_STD_MAP_TYPE
 #include <unordered_map>
 #endif
 #pragma endregion
@@ -75,6 +83,8 @@ namespace rtti
 	template< class T1, class T2 > class MapType;
 	template< class T, size_t Count > class ArrayType;
 	template< class T > class PrimitiveType;
+	template< class T > class SharedPtrType;
+	template< class T > class UniquePtrType;
 	using TypeId = size_t;
 
 	namespace internal
@@ -94,13 +104,15 @@ namespace rtti
 		template <template <typename...> class Tmpl, typename ...Args>
 		struct is_template<Tmpl<Args...>> : std::true_type {};
 
+#if RTTI_CFG_CREATE_STD_SET_TYPE
 		template< class T >
 		struct is_vector : std::false_type {};
 
 		template< class T >
 		struct is_vector< std::vector< T > > : std::true_type {};
+#endif
 
-#if RTTI_CREATE_STD_SET_TYPE
+#if RTTI_CFG_CREATE_STD_SET_TYPE
 		template< class T >
 		struct is_set : std::false_type {};
 
@@ -108,7 +120,7 @@ namespace rtti
 		struct is_set< std::unordered_set< T > > : std::true_type {};
 #endif
 
-#if RTTI_CREATE_STD_PAIR_TYPE
+#if RTTI_CFG_CREATE_STD_PAIR_TYPE
 		template< class T >
 		struct is_pair : std::false_type {};
 
@@ -116,12 +128,28 @@ namespace rtti
 		struct is_pair< std::pair< T1, T2 > > : std::true_type {};
 #endif
 
-#if RTTI_CREATE_STD_MAP_TYPE
+#if RTTI_CFG_CREATE_STD_MAP_TYPE
 		template< class T >
 		struct is_map : std::false_type {};
 
 		template< class T1, class T2 >
 		struct is_map< std::unordered_map< T1, T2 > > : std::true_type {};
+#endif
+
+#if RTTI_CFG_CREATE_STD_SHAREDPTR_TYPE
+		template< class T >
+		struct is_sharedPtr : std::false_type {};
+
+		template< class T >
+		struct is_sharedPtr< std::shared_ptr< T > > : std::true_type {};
+#endif
+
+#if RTTI_CFG_CREATE_STD_UNIQUEPTR_TYPE
+		template< class T >
+		struct is_uniquePtr : std::false_type {};
+
+		template< class T >
+		struct is_uniquePtr< std::unique_ptr< T > > : std::true_type {};
 #endif
 
 		template<class T>
@@ -149,24 +177,34 @@ namespace rtti
 	template< class T >
 	struct type_of< T, std::enable_if_t< std::is_pointer_v< T > > > { using type = PointerType< std::remove_const_t< std::remove_pointer_t< T > > >; };
 
-#if RTTI_CREATE_STD_VECTOR_TYPE
+#if RTTI_CFG_CREATE_STD_VECTOR_TYPE
 	template< class T >
 	struct type_of< T, std::enable_if_t< internal::is_vector< T >::value > > { using type = VectorType< std::remove_const_t< typename T::value_type > >; };
 #endif
 
-#if RTTI_CREATE_STD_SET_TYPE
+#if RTTI_CFG_CREATE_STD_SET_TYPE
 	template< class T >
 	struct type_of< T, std::enable_if_t< internal::is_set< T >::value > > { using type = SetType< std::remove_const_t< typename T::value_type > >; };
 #endif
 
-#if RTTI_CREATE_STD_PAIR_TYPE
+#if RTTI_CFG_CREATE_STD_PAIR_TYPE
 	template< class T >
 	struct type_of< T, std::enable_if_t< internal::is_pair< T >::value > > { using type = internal::PairType< std::remove_const_t< typename T::first_type >, std::remove_const_t< typename T::second_type > >; };
 #endif
 
-#if RTTI_CREATE_STD_MAP_TYPE
+#if RTTI_CFG_CREATE_STD_MAP_TYPE
 	template< class T >
 	struct type_of< T, std::enable_if_t< internal::is_map< T >::value > > { using type = MapType< std::remove_const_t< typename T::key_type >, std::remove_const_t< typename T::mapped_type > >; };
+#endif
+
+#if RTTI_CFG_CREATE_STD_SHAREDPTR_TYPE
+	template< class T >
+	struct type_of< T, std::enable_if_t< internal::is_sharedPtr< T >::value > > { using type = SharedPtrType< std::remove_const_t< typename T::element_type > >; };
+#endif
+
+#if RTTI_CFG_CREATE_STD_UNIQUEPTR_TYPE
+	template< class T >
+	struct type_of< T, std::enable_if_t< internal::is_uniquePtr< T >::value > > { using type = UniquePtrType< std::remove_const_t< typename T::element_type > >; };
 #endif
 
 	template< class T >
@@ -899,7 +937,7 @@ namespace rtti
 #pragma endregion
 
 #pragma region PairType
-#if RTTI_CREATE_STD_PAIR_TYPE || RTTI_CREATE_STD_MAP_TYPE
+#if RTTI_CFG_CREATE_STD_PAIR_TYPE || RTTI_CFG_CREATE_STD_MAP_TYPE
 namespace rtti
 {
 	namespace internal
@@ -947,7 +985,7 @@ namespace rtti
 		};
 	}
 
-	#if RTTI_CREATE_STD_PAIR_TYPE
+	#if RTTI_CFG_CREATE_STD_PAIR_TYPE
 	template< class T1, class T2 >
 	using PairType = internal::PairType< T1, T2 >;
 	#endif
@@ -1093,7 +1131,7 @@ namespace rtti
 #pragma endregion
 
 #pragma region VectorType
-#if RTTI_CREATE_STD_VECTOR_TYPE
+#if RTTI_CFG_CREATE_STD_VECTOR_TYPE
 namespace rtti
 {
 	template< class T >
@@ -1112,7 +1150,7 @@ namespace rtti
 #pragma endregion
 
 #pragma region SetType
-#if RTTI_CREATE_STD_SET_TYPE
+#if RTTI_CFG_CREATE_STD_SET_TYPE
 namespace rtti
 {
 	template< class T >
@@ -1334,4 +1372,80 @@ namespace rtti
 		size_t m_alignment = ParentType::GetAlignment();
 	};
 }
+#pragma endregion
+
+#pragma region SharedPtr
+#if RTTI_CFG_CREATE_STD_SHAREDPTR_TYPE
+namespace rtti
+{
+	template< class T >
+	class SharedPtrType : public internal::TemplateType< SharedPtrType< T >, std::shared_ptr< T >, rtti::Type >
+	{
+		friend class ::rtti::RTTI;
+		friend class internal::TemplateType< SharedPtrType, std::shared_ptr< T >, rtti::Type >;
+
+	public:
+		static constexpr const char* GetBaseName() { return "SharedPtr"; }
+
+		static const typename type_of< T >::type& GetInternalTypeStatic()
+		{
+			return GetTypeInstanceOf< T >();
+		}
+
+		const typename type_of< T >::type& GetInternalType() const
+		{
+			return GetInternalTypeStatic();
+		}
+
+		virtual void Destroy( void* ptr ) const override
+		{
+			static_cast< std::shared_ptr< T >* >( ptr )->~shared_ptr< T >();
+		}
+
+	private:
+		static std::array<const Type*, 1> GetInternalTypesStatic()
+		{
+			return { &GetInternalTypeStatic() };
+		}
+	};
+}
+#endif
+#pragma endregion
+
+#pragma region UniquePtr
+#if RTTI_CFG_CREATE_STD_UNIQUEPTR_TYPE
+namespace rtti
+{
+	template< class T >
+	class UniquePtrType : public internal::TemplateType< UniquePtrType< T >, std::unique_ptr< T >, rtti::Type >
+	{
+		friend class ::rtti::RTTI;
+		friend class internal::TemplateType< UniquePtrType< T >, std::unique_ptr< T >, rtti::Type >;
+
+	public:
+		static constexpr const char* GetBaseName() { return "UniquePtr"; }
+
+		static const typename type_of< T >::type& GetInternalTypeStatic()
+		{
+			return GetTypeInstanceOf< T >();
+		}
+
+		const typename type_of< T >::type& GetInternalType() const
+		{
+			return GetInternalTypeStatic();
+		}
+
+		virtual void Destroy( void* ptr ) const override
+		{
+			static_cast< std::unique_ptr< T >* >( ptr )->~unique_ptr< T >();
+		}
+
+	private:
+		static std::array<const Type*, 1> GetInternalTypesStatic()
+		{
+			return { &GetInternalTypeStatic() };
+		}
+	};
+}
+#endif
 #pragma endregion
