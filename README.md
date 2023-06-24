@@ -1,318 +1,39 @@
-# Mini-RTTI
-Mini-RTTI is a small, header only library which provides type data for your classes and structs.
+# LibeRTTI :statue_of_liberty:
+LibeRTTI is header only and dependencies free library which provides type data for your (and selected built-in) c++ types.
 
-# Usage
-First you have to put one of four macros in your class body
-* For regular, non virtual classes use:
+## Features
+
+| Feature                          | Description   |
+| :---                             | :---          |
+| **Hierarchy based** | Every registered type gets it's unique nested type class, e.g if you have a `class A` then it's type class is will be `A::Type`. These type classes creates a hierarchy based on their original classes hierarchy. `rtti:Type` is the base class for all types classes. So for instance, if `class A : public B`, then `class A::Type : class B::Type`. Also, all type classes are virtual, even if their original classes are not. It allows you to take advantage of polymorphic features like having a function parameter of type `const A::Type&` and passing the children types of A as arguments. |
+| **Super keyword** | A well known feature from other languages. The `Super` keyword refers to the parent class of your class |
+| **Instantiating/Destroying/Copying without knowing true type** | Type classes are able to instantiate, destroy or copy raw memory which contains the types they represent. |
+| **Move without knowing true type (Optional)** | Same as above but with the move operation. It forces all registered types to be movable. It might be disabled by defining `RTTI_REQUIRE_MOVE_CTOR 0` before including the **LibeRTTI** header. |
+| **Recognizing object's true type** | You can get the true type of your polymorphic class instance. |
+| **Types register** | **LibeRTTI** gives you access to all registered types. |
+| **Properties** | Types might keep data about the type's selected member variables. |
+| **Unique and persistent IDs** | All registered types and their properties get unique IDs which persist between executions unless the name of the type/property changes. |
+| **Primitive Types** | All primitive types are registered out of the box. |
+| **Pointer Types** | Pointer types are registered lazily at runtime when the need for them arrises. You're not limited by the amount of indirections (properties like `float*****` are allowed). Pointer types follow their original classes hierarchy. I.e `PointerType<B>` inherits from `PointerType<A>` if `B` also inherits from `A`. |
+| **std:: <br /> shared_ptr / <br /> unique_ptr / <br /> vector / <br />unordered_set / <br />unordered_map / <br />pair <br /> Types (Optional)** | All these types are registered out of the box and might be disabled using config defines: `RTTI_CFG_CREATE_STD_SHAREDPTR_TYPE 0`, <br />`RTTI_CFG_CREATE_STD_UNIQUEPTR_TYPE 0`, <br /> `RTTI_CFG_CREATE_STD_VECTOR_TYPE 0`, <br /> `RTTI_CFG_CREATE_STD_SET_TYPE 0`,<br /> `RTTI_CFG_CREATE_STD_MAP_TYPE 0`,<br /> `RTTI_CFG_CREATE_STD_PAIR_TYPE 0` |
+
+## Usage
+Registering your type requires 2 steps.
+### 1. Declare type
+Put one of the following macros into your type's body.
+| Type                             | Macro   |
+| :---                             | :---          |
+| Regular, non virtual class | <pre lang=cpp> RTTI_DECLARE_CLASS( <class_name>, <parent_name_with_namespace> (optional) ) </pre>
+| Virtual class | <pre lang=cpp> RTTI_DECLARE_POLYMORPHIC_CLASS( <class_name>, <parent_name_with_namespace> (optional) ) </pre>
+| Abstract class | <pre lang=cpp> RTTI_DECLARE_ABSTRACT_CLASS( <class_name>, <parent_name_with_namespace> (optional) ) </pre>
+| Struct | <pre lang=cpp> RTTI_DECLARE_STRUCT( <struct_name>, <parent_name_with_namespace> (optional) ) </pre>
+### 2. Implement type
+Put the following macro in .cpp file.
 ```cpp
-RTTI_DECLARE_CLASS( <class_name>, <parent_name_with_namespace> (optional) )
+RTTI_IMPLEMENT_TYPE( <class_name_with_namespace>, <properties_registration_macros>... (optional> )
 ```
-
-* If your class is virtual:
-```cpp
-RTTI_DECLARE_POLYMORPHIC_CLASS( <class_name>, <parent_name_with_namespace> (optional) )
-```
-
-* If your class is abstract use:
-```cpp
-RTTI_DECLARE_ABSTRACT_CLASS( <class_name>, <parent_name_with_namespace> (optional) )
-```
-
-* For structs use:
-```cpp
-RTTI_DECLARE_STRUCT( <struct_name>, <parent_name_with_namespace> (optional) )
-```
-<br/>
-Whatever your class is, eventually you need to put:
-
-```cpp
-RTTI_IMPLEMENT_TYPE( <class_name_with_namespace>, <properties_names>... (optional> )
-```
-in your .cpp file.
-
 To register property of your type use:
 ```cpp
 RTTI_REGISTER_PROPERTY( <property_name> )
 ```
-and put in in `RTTI_IMPLEMENT_TYPE` macro.
-
-Your type is required to have default constructor! <br/>
-It's also required to have move constructor, but this is an optional feature which you can turn of switching `RTTI_REQUIRE_MOVE_CTOR` to `0` <br/>
-And that's it, you can now get some info about your type in the runtime.
-
-# What can I do with that?
-### Hierarchy <br/>
-Every registered type gets it's unique nested type class, e.g if you have a `class A` then it's type class is will be `A::Type`. These type classes creates a hierarchy based on their original classes hierarchy. `rtti:Type` is the base class for all types classes.
-So for instance, if `class A : public B`, then `class A::Type : class B::Type`. Also, all type classes are virtual, even if their original classes are not. It allows you to take advantage of polymorphic features like having a parameter of type `const B::Type&` and passing B's children types as arguments.
-
-### Access parent class without literally typing it <br/>
-Very often you might need to invoke some parent class method, but C++ doesn't provide out of the box way to know what your parent is.
-In such cases you can use `Super` in your class which you likely know from other languages.
-
-### Instantiate class instance based on type class
-Type classes are able to instantiate it's original classes instances in runtime.
-
-### Move class instance
-You can invoke move constructor for some place in memory. Useful if you're working on raw memory and want to move class instance between buffers.
-This is an optional feature since it forces all classes to have move constructor. To enable it set `RTTI_REQUIRE_MOVE_CTOR` to `1`
-
-### Recognizing object true type <br/>
-You can get the true type of your polymorphic class and get some additional information about it, compare it etc.
-Have a look on code examples to see what data about your type you can get.
-
-### Types register
-You have access to the list of all registered types.
-
-### Unique and persistent IDs
-All registered types and their properties get unique IDs which persist between executions until the name of the type/property changes. Might be used for serialization.
-
-# Primitive Types
-To get primitive's type use `rtti::PrimitiveType< <primitive_type_name> >::GetInstance()`.
-All primitive types are registered out of the box. However, if I skipped something, you can add new one by adding `DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( <primitive_type_name> )` to your header.
-
-# Properties
-You have a data about type's (and inherited from type's) selected variables called properties. Very useful in case you implement serialization or some UI.
-
-# Code Examples
-* Non-virtual classes
-```cpp
-// .h
-class A
-{
-  RTTI_DECLARE_CLASS( A )
-};
-
-// .cpp
-RTTI_IMPLEMENT_TYPE( A )
-```
-
-* Virtual classes
-```cpp
-// .h
-class A
-{
-  RTTI_DECLARE_POLYMORPHIC_CLASS( A )
-  virtual ~A() = default;
-};
-
-// .cpp
-RTTI_IMPLEMENT_TYPE( A )
-```
-
-* Structs
-```cpp
-// .h
-struct A
-{
- RTTI_ DECLARE_STRUCT( A )
-};
-
-// .cpp
-RTTI_IMPLEMENT_TYPE( A )
-```
-
-* Abstract class
-```cpp
-// .h
-class I
-{
-RTTI_DECLARE_ABSTRACT_CLASS( I );
-public:
-    virtual ~I() = 0;
-}
-
-// .cpp
-RTTI_IMPLEMENT_TYPE( I );
-```
-
-* Class in namespace
-```cpp
-// .h
-namespace a
-{
-  class A
-  {
-    RTTI_DECLARE_CLASS( A )
-  };
-}
-
-// .cpp
-RTTI_IMPLEMENT_TYPE( a::A )
-```
-
-* Inheritance
-```cpp
-// .h
-namespace a
-{
-  class A;
-}
-
-class B : public A
-{
-  RTTI_DECLARE_CLASS( B, a::A )
-}
-
-namespace c
-{
-  class C : public B
-  {
-    RTTI_DECLARE_POLYMORPHIC_CLASS( C, B )
-    virtual ~C() = default;
-  };
-}
-
-class D : public C
-{
-    RTTI_DECLARE_POLYMORPHIC_CLASS( D, c::C )
-}
-
-// .cpp
-RTTI_IMPLEMENT_TYPE( a::A );
-RTTI_IMPLEMENT_TYPE( B );
-RTTI_IMPLEMENT_TYPE( c::C );
-RTTI_IMPLEMENT_TYPE( D );
-```
-* Properties registration
-```cpp
-// .h
-struct StructWithProperties
-{
-  RTTI_DECLARE_STRUCT( StructWithProperties );
-  TestFoo m_firstVar; // TestFoo has to be registered type if you want to register it as a property!
-  float m_secondVar;
-  bool m_anotherVar;
-};
-
-// .cpp
-RTTI_IMPLEMENT_TYPE( StructWithProperties,
-  RTTI_REGISTER_PROPERTY( m_firstVar );
-  RTTI_REGISTER_PROPERTY( m_secondVar );
-  RTTI_REGISTER_PROPERTY( m_anotherVar );
-)
-```
-
-* Type information
-```cpp
-class A
-{
-  RTTI_DECLARE_CLASS( A )
-};
-namespace b
-{
-  class B : public A 
-  {
-    RTTI_DECLARE_CLASS( B, A )
-  };
-}
-
-class C
-{
-  RTTI_DECLARE_POLYMORPHIC_CLASS( C )
-};
-namespace d
-{
-  class D : public C 
-  {
-    RTTI_DECLARE_POLYMORPHIC_CLASS( D, C )
-  };
-}
-
-A* b = new b::B();
-C* d = new d::D();
-
-const rtti::Type& aType = A::GetTypeStatic();
-const rtti::Type& bType = b->GetType();
-bType == aType; // true, because b is A* and both A and B are not virtual classes
-
-const rtti::Type& cType = C::GetTypeStatic();
-const rtti::Type& dType = d->GetType();
-cType == dType; // false, d is C*, but both C and D are virtual classes
-
-aType.GetName(); // "A"
-bType.GetName(); // "A"
-cType.GetName(); // "C"
-dType.GetName(); // "D"
-
-bType.GetHash(); // unique hash for each type
-bType.IsAbstract(); // false
-bType.IsVirtual(); // false
-dType.IsVirtual(); // true
-
-dType.IsA< d::D >(); // true
-dType.IsA< C >(); // false
-dType.IsA == cType; // false
-
-dType.InheritsFrom< d::D >(); // false
-dType.InheritsFrom< C >(); // true
-dType.InheritsFrom( cType ); //true
-
-d->IsA< d::D >(); // true
-d->IsA< C >(); // false
-
-d->InheritsFrom< d::D >(); // false
-d->InheritsFrom< C >(); // true
-
-b.InheritsFromOrIsA< d::D >(); // true
-b.InheritsFromOrIsA< C >(); // true
-```
-
-* Instantiating class default object
-``` cpp
-const C::Type* baseType = &C::GetStaticType();
-
-std::unique_ptr< C > c = baseType->Construct(); // c is instance of C
-
-baseType = &d::D::GetStaticType();
-std::unique_ptr< C > d = baseType->Construct(); // d is instance of D
-
-void* buffer = new char[baseType->GetSize()]; // GetSize returns the size of the type
-baseType->ConstructInPlace( buffer ); // Constructs object in selected place
-baseType->Destroy( buffer ); // Destroys object in selected place
-```
-
-* Moving class instance between buffers (optional feature)
-``` cpp
-#define RTTI_REQUIRE_MOVE_CTOR 1
-
-const C::Type* baseType = &C::GetStaticType();
-
-void* buffer0 = new char[baseType->GetSize()]; // GetSize returns the size of the type
-void* buffer1 = new char[baseType->GetSize()]; // GetSize returns the size of the type
-baseType->ConstructInPlace( buffer0 ); // Constructs object in selected place
-baseType->MoveInPlace( buffer1, buffer0 ); // Moves object from buffer0 to buffer1
-
-baseType->Destroy( buffer0 ); // Destroys object in selected place
-baseType->Destroy( buffer1 ); // Destroys object in selected place
-```
-
-* Types register
-``` cpp
-const auto& allTypes = rtti::Get().GetTypes();
-```
-
-* Primitive types
-``` cpp
-const rtti::Type& floatType = ::rtti::PrimitiveType< float >::GetInstance();
-const rtti::Type& boolType = ::rtti::PrimitiveType< bool >::GetInstance();
-```
-
-* IDs
-``` cpp
-const rtti::Type& type = A::GetTypeStatic();
-size_t uniqueAndPersistentID = type.GetID();
-```
-
-* Properties
-``` cpp
-void* buff = new StructWithProperties();
-
-const rtti::Type& type = StructWithProperties::GetTypeStatic();
-const rtti::IProperty* foundProperty = type.FindProperty( "m_primitiveType" ); // Finding type's property
-const rtti::Property< float >* floatProperty = foundProperty->Cast< float >(); // Casting property to specific property type
-
-floatProperty->SetValue( buff, 321u ); // Set value using property
-float value = floatProperty->GetValue( buff ); // Get value using property
-
-delete buff;
-```
+and put it in `RTTI_IMPLEMENT_TYPE` macro.
