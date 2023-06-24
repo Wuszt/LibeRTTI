@@ -24,8 +24,11 @@ Put one of the following macros into your type's body.
 | Type                             | Macro   |
 | :---                             | :---          |
 | Regular, non virtual class | <pre lang=cpp> RTTI_DECLARE_CLASS( <class_name>, <parent_name_with_namespace> (optional) ) </pre>
+|                             |        |
 | Virtual class | <pre lang=cpp> RTTI_DECLARE_POLYMORPHIC_CLASS( <class_name>, <parent_name_with_namespace> (optional) ) </pre>
+|                            |          |
 | Abstract class | <pre lang=cpp> RTTI_DECLARE_ABSTRACT_CLASS( <class_name>, <parent_name_with_namespace> (optional) ) </pre>
+|                            |        |
 | Struct |  <pre lang=cpp> RTTI_DECLARE_STRUCT( <struct_name>, <parent_name_with_namespace> (optional) ) </pre>
 ### 2. Implement type
 Put the following macro in .cpp file.
