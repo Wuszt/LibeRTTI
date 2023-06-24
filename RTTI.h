@@ -138,10 +138,13 @@ namespace rtti
 	struct type_of {};
 
 	template< class T >
+	struct type_of< T, std::enable_if_t< std::is_same_v< T, void > > >{ using type = Type; };
+
+	template< class T >
 	struct type_of< T, std::enable_if_t< std::is_class_v< T > && !internal::is_template< T >::value && !internal::is_array< T >::value > > { using type = typename T::Type; };
 
 	template< class T >
-	struct type_of< T, std::enable_if_t< std::is_fundamental_v< T > > > { using type = PrimitiveType< T >; };
+	struct type_of< T, std::enable_if_t< std::is_fundamental_v< T > && !std::is_same_v< T, void >  > > { using type = PrimitiveType< T >; };
 
 	template< class T >
 	struct type_of< T, std::enable_if_t< std::is_pointer_v< T > > > { using type = PointerType< std::remove_const_t< std::remove_pointer_t< T > > >; };
@@ -237,18 +240,24 @@ namespace rtti
 			return s_rtti;
 		}
 
+		template< class T, class... TArgs >
+		const T& GetOrRegisterType( const TArgs& ... args ) const
+		{
+			return const_cast< RTTI& >( this ).GetOrRegisterType< T >( std::forward< const TArgs& >( args )... );
+		}
+
 		template< class T, class... TArgs, std::enable_if_t< internal::has_CalcId< T >::value, bool > = true >
-		const T& GetOrRegisterType( const TArgs& ... args )
+		T& GetOrRegisterType( const TArgs& ... args )
 		{
 			TypeId id = T::CalcId( args... );
 			auto found = m_types.find( id );
 
 			if ( found != m_types.end() )
 			{
-				return static_cast< const T& >( *found->second );
+				return static_cast< T& >( *found->second );
 			}
 
-			T* instance = new T( std::forward< TArgs >( args )... );
+			T* instance = new T( std::forward< const TArgs& >( args )... );
 			m_types.emplace( id, instance );
 
 			instance->OnRegistered();
@@ -257,9 +266,9 @@ namespace rtti
 		}
 
 		template< class T, class... TArgs, std::enable_if_t< !internal::has_CalcId< T >::value, bool > = true >
-		const T& GetOrRegisterType( const TArgs& ... args )
+		T& GetOrRegisterType( const TArgs& ... args )
 		{
-			std::unique_ptr< T > instance( new T( std::forward< TArgs >( args )... ) );
+			std::unique_ptr< T > instance( new T( std::forward< const TArgs& >( args )... ) );
 
 			auto currentInstance = m_types.find( instance->GetID() );
 
@@ -272,11 +281,28 @@ namespace rtti
 				return result;
 			}
 
-			return static_cast< const T& >( *currentInstance->second );
+			return static_cast< T& >( *currentInstance->second );
+		}
+
+		const Type* FindType( TypeId id ) const
+		{
+			auto found = m_types.find( id );
+			if ( found != m_types.end() )
+			{
+				return found->second.get();
+			}
+
+			return nullptr;
+		}
+
+		const Type* FindType( const char* name ) const
+		{
+			TypeId id = internal::CalcHash( name );
+			return FindType( id );
 		}
 
 	private:
-		std::unordered_map< TypeId, std::unique_ptr< const Type > > m_types;
+		std::unordered_map< TypeId, std::unique_ptr< Type > > m_types;
 	};
 
 	static auto Get = RTTI::Get;
@@ -402,12 +428,15 @@ namespace rtti
 			return false;
 		}
 
-		virtual void ConstructInPlace( void* dest ) const = 0;
+		virtual void ConstructInPlace( void* dest ) const = 0
+		{}
 
 #if RTTI_REQUIRE_MOVE_CTOR
-		virtual void MoveInPlace( void* dest, void* src ) const = 0;
+		virtual void MoveInPlace( void* dest, void* src ) const = 0
+		{}
 #endif
-		virtual void Destroy( void* ptr ) const = 0;
+		virtual void Destroy( void* ptr ) const = 0
+		{}
 
 		virtual bool IsAbstract() const
 		{
@@ -424,7 +453,11 @@ namespace rtti
 			return m_id;
 		}
 
-		virtual size_t GetSize() const = 0;
+		virtual size_t GetSize() const = 0
+		{ return 0u; }
+
+		virtual size_t GetAlignment() const = 0
+		{ return 0u; }
 
 		virtual size_t GetPropertiesAmount() const { return 0u; }
 		virtual const Property* GetProperty( size_t index ) const { return nullptr; }
@@ -462,10 +495,15 @@ namespace rtti
 		static size_t GetPropertiesAmountStatic() { return 0u; }
 		static const ::rtti::Property* GetPropertyStatic( size_t index ) { return nullptr; }
 
+		static std::unique_ptr< ::rtti::Property > CreateProperty( const char* name, size_t offset, const Type& type )
+		{
+			return std::unique_ptr< ::rtti::Property >( new ::rtti::Property( name, offset, type ) );
+		}
+
 		template< class T >
 		static std::unique_ptr< ::rtti::Property > CreateProperty( const char* name, size_t offset )
 		{
-			return std::unique_ptr< ::rtti::Property >( new ::rtti::Property( name, offset, GetTypeInstanceOf< std::remove_const_t< T > >() ) );
+			return CreateProperty( name, offset, GetTypeInstanceOf< std::remove_const_t< T > >() );
 		}
 
 	private:
@@ -542,6 +580,10 @@ public: \
 		virtual size_t GetSize() const override \
 		{ \
 			return sizeof( ClassName ); \
+		} \
+		virtual size_t GetAlignment() const override \
+		{ \
+			return alignof( ClassName ); \
 		} \
 		static const Type& GetInstance() \
 		{ \
@@ -739,8 +781,9 @@ namespace rtti
 		}
 #endif
 
-		void Destroy( void* ptr ) const override {}
-		size_t GetSize() const override { return sizeof( void* ); }
+		virtual void Destroy( void* ptr ) const override {}
+		virtual size_t GetSize() const override { return sizeof( void* ); }
+		virtual size_t GetAlignment() const override { return alignof( void* ); }
 
 		virtual const char* GetName() const override { return m_strName.c_str(); }
 
@@ -816,6 +859,11 @@ namespace rtti
 			virtual size_t GetSize() const override
 			{
 				return sizeof( TrueType );
+			}
+
+			virtual size_t GetAlignment() const override
+			{
+				return alignof( TrueType );
 			}
 
 		protected:
@@ -1022,6 +1070,11 @@ namespace rtti
 			return sizeof( T ) * Count;
 		}
 
+		size_t GetAlignment() const override
+		{
+			return alignof( T );
+		}
+
 	private:
 		ArrayType()
 			: ContainerType( CalcId() )
@@ -1115,7 +1168,7 @@ namespace rtti
 		virtual const char* GetName() const;
 		virtual void ConstructInPlace( void* dest ) const
 		{
-			*static_cast< T* >( dest ) = T();
+			new ( dest ) T();
 		}
 
 #if RTTI_REQUIRE_MOVE_CTOR
@@ -1127,6 +1180,8 @@ namespace rtti
 		virtual void Destroy( void* ptr ) const override {}
 
 		virtual size_t GetSize() const override { return sizeof( T ); }
+
+		virtual size_t GetAlignment() const override { return alignof( T ); }
 
 		virtual bool IsPrimitive() const override { return true; }
 
@@ -1163,4 +1218,120 @@ RTTI_DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( unsigned )
 RTTI_DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( unsigned long long )
 RTTI_DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( double )
 RTTI_DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( __int8 )
+#pragma endregion
+
+#pragma region RuntimeType
+namespace rtti
+{
+	template< class Parent = void >
+	class RuntimeType : public type_of< Parent >::type
+	{
+		friend class ::rtti::RTTI;
+		using ParentType = typename type_of< Parent >::type;
+	public:
+		static RuntimeType& Create( std::string name )
+		{
+			if ( ::rtti::Get().FindType( name.c_str() ) )
+			{
+				throw; // Type with this name already exists
+			}
+
+			return ::rtti::RTTI::GetMutable().GetOrRegisterType< RuntimeType >( std::move( name ) );
+		}
+
+		const std::unique_ptr< ::rtti::Property >& AddProperty( const char* name, const Type& type )
+		{
+			size_t currentOffset = ParentType::GetSize();
+			
+			if ( GetPropertiesAmount() > 0u )
+			{
+				const auto& lastProperty = GetProperty( GetPropertiesAmount() - 1u );
+				currentOffset = lastProperty->GetOffset() + lastProperty->GetType().GetSize();
+				currentOffset = ( ( currentOffset + ( type.GetAlignment() - 1u ) ) & ~( type.GetAlignment() - 1u ) );
+			}
+
+			m_properties.emplace_back( ::rtti::Type::CreateProperty( name, currentOffset, type ) );
+			m_size = currentOffset - ParentType::GetSize() + type.GetSize();
+			m_alignment = std::max( m_alignment, type.GetAlignment() );
+			return m_properties.back();
+		}
+
+		template< class T >
+		const std::unique_ptr< ::rtti::Property >& AddProperty( const char* name )
+		{
+			return AddProperty( name, GetTypeInstanceOf< T >() );
+		}
+
+		virtual const char* GetName() const override
+		{
+			return m_name.c_str();
+		}
+
+		virtual void ConstructInPlace( void* dest ) const override
+		{
+			ParentType::ConstructInPlace( dest );
+			for ( const auto& property : m_properties )
+			{
+				const auto& type = property->GetType();
+				type.ConstructInPlace( static_cast< uint8_t* >( dest ) + property->GetOffset() );
+			}
+		}
+
+#if RTTI_REQUIRE_MOVE_CTOR
+		virtual void MoveInPlace( void* dest, void* src ) const override
+		{
+			ParentType::MoveInPlace( dest, src );
+			for ( const auto& property : m_properties )
+			{
+				const auto& type = property->GetType();
+				type.MoveInPlace( static_cast< uint8_t* >( dest ) + property->GetOffset(), static_cast< uint8_t* >( src ) + property->GetOffset() );
+			}
+		}
+#endif
+
+		virtual void Destroy( void* ptr ) const override
+		{
+			ParentType::Destroy( ptr );
+			for ( const auto& property : m_properties )
+			{
+				const auto& type = property->GetType();
+				type.Destroy( static_cast< uint8_t* >( ptr ) + property->GetOffset() );
+			}
+		}
+
+		virtual size_t GetSize() const override
+		{
+			return m_size;
+		}
+
+		virtual size_t GetAlignment() const override
+		{
+			return m_alignment;
+		}
+
+		virtual size_t GetPropertiesAmount() const override { return ParentType::GetPropertiesAmountStatic() + m_properties.size(); }
+		virtual const ::rtti::Property* GetProperty( size_t index ) const override
+		{
+			if ( index < ParentType::GetPropertiesAmountStatic() )
+			{
+				return ParentType::GetPropertyStatic( index );
+			}
+			else
+			{
+				return m_properties[ index - ParentType::GetPropertiesAmountStatic() ].get();
+			}
+		}
+
+	private:
+		RuntimeType( std::string name )
+			: ParentType( name.c_str() )
+			, m_name( std::move( name ) )
+		{}
+
+		std::string m_name;
+		std::vector< std::unique_ptr< ::rtti::Property > > m_properties;
+		size_t m_size = ParentType::GetSize();
+		size_t m_alignment = ParentType::GetAlignment();
+	};
+}
 #pragma endregion
