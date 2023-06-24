@@ -43,4 +43,4 @@ RTTI_REGISTER_PROPERTY( <property_name> )
 and put it in `RTTI_IMPLEMENT_TYPE` macro.
 
 ---
-Examples can be found in [**Tests**](https://github.com/Wuszt/LibeRTTI/blob/main/Tests/RTTIUT.cpp) or [**Forge project**](https://github.com/Wuszt/Forge) source code.
+Examples can be found in [**Tests**](https://github.com/Wuszt/LibeRTTI/tree/main/Tests) or [**Forge project**](https://github.com/Wuszt/Forge) source code.
