@@ -16,7 +16,7 @@ LibeRTTI is header only and dependencies free library which provides type data f
 | **Primitive Types** | All primitive types are registered out of the box. |
 | **Pointer Types** | Pointer types are registered lazily at runtime when the need for them arrises. You're not limited by the amount of indirections (properties like `float*****` are allowed). Pointer types follow their original classes hierarchy. I.e `PointerType<B>` inherits from `PointerType<A>` if `B` also inherits from `A`. |
 | **Runtime Types** | You can compose completely new type with selected properties in runtime. Such types can still inherit from other types and preserve hierarchy of classes.
-| **std:: <br /> shared_ptr / <br /> unique_ptr / <br /> vector / <br />unordered_set / <br />unordered_map / <br />pair <br /> Types (Optional)** | All these types are registered out of the box and might be disabled using config defines: <br />`RTTI_CFG_CREATE_STD_SHAREDPTR_TYPE 0`, <br />`RTTI_CFG_CREATE_STD_UNIQUEPTR_TYPE 0`, <br /> `RTTI_CFG_CREATE_STD_VECTOR_TYPE 0`, <br /> `RTTI_CFG_CREATE_STD_SET_TYPE 0`,<br /> `RTTI_CFG_CREATE_STD_MAP_TYPE 0`,<br /> `RTTI_CFG_CREATE_STD_PAIR_TYPE 0` <br />  &#8205;  |
+| **std:: <br /> shared_ptr <br /> unique_ptr <br /> vector <br />unordered_set <br />unordered_map <br />pair <br /> Types (Optional)** | All these types are registered out of the box and might be disabled using config defines: <br />`RTTI_CFG_CREATE_STD_SHAREDPTR_TYPE 0`, <br />`RTTI_CFG_CREATE_STD_UNIQUEPTR_TYPE 0`, <br /> `RTTI_CFG_CREATE_STD_VECTOR_TYPE 0`, <br /> `RTTI_CFG_CREATE_STD_SET_TYPE 0`,<br /> `RTTI_CFG_CREATE_STD_MAP_TYPE 0`,<br /> `RTTI_CFG_CREATE_STD_PAIR_TYPE 0` <br />  &#8205;  |
 
 ## Usage
 Registering your type requires 2 steps.
