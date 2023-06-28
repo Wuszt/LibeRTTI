@@ -1,5 +1,5 @@
 # LibeRTTI :statue_of_liberty:
-LibeRTTI is header only and dependencies free library which provides type data for your (and selected built-in) c++ types.
+LibeRTTI is header only and dependencies free library which provides type data for your (and selected built-in) c++ types. The minimal requirement is C++14.
 
 ## Features
 
