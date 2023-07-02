@@ -302,7 +302,7 @@ TEST( TestCaseName, AreNonPrimitiveTypesRegistered )
 	::rtti::Get().GetTypes( types );
 	for ( const ::rtti::Type* type : types )
 	{
-		anyNonPrimitives |= !type->IsPrimitive();
+		anyNonPrimitives |= type->GetKind() != rtti::Type::Kind::Primitive;
 	}
 
 	EXPECT_TRUE( anyNonPrimitives );
@@ -315,7 +315,7 @@ TEST( TestCaseName, ArePrimitiveTypesRegistered )
 	::rtti::Get().GetTypes( types );
 	for ( const ::rtti::Type* type : types )
 	{
-		anyPrimitives |= type->IsPrimitive();
+		anyPrimitives |= type->GetKind() == rtti::Type::Kind::Primitive;
 	}
 
 	EXPECT_TRUE( anyPrimitives );
@@ -448,7 +448,7 @@ TEST( TestCaseName, PropertiesOffsets )
 			}
 			else if ( strcmp( property->GetName(), "m_primitiveType" ) == 0 )
 			{
-				EXPECT_TRUE( property->GetType().IsPrimitive() );
+				EXPECT_TRUE( property->GetType().GetKind() == rtti::Type::Kind::Primitive );
 				EXPECT_EQ( property->GetOffset(), 12u );
 				++performedTests;
 			}

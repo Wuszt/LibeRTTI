@@ -419,6 +419,16 @@ namespace rtti
 	class Type
 	{
 	public:
+		enum class Kind
+		{
+			Class,
+			Struct,
+			Primitive,
+			Pointer,
+			Container,
+			RuntimeType,
+		};
+
 		Type() = delete;
 		Type( const Type& ) = delete;
 		Type( Type&& ) = delete;
@@ -461,10 +471,7 @@ namespace rtti
 			return !(*this == rhl);
 		}
 
-		virtual bool IsPrimitive() const
-		{
-			return false;
-		}
+		virtual Kind GetKind() const = 0;
 
 		virtual void ConstructInPlace( void* dest ) const = 0
 		{}
@@ -577,7 +584,7 @@ namespace rtti
 #define RTTI_INTERNAL_PARENT_CLASS_TYPE_true( ParentClassName ) ParentClassName::Type
 #define RTTI_INTERNAL_PARENT_CLASS_TYPE_false( ParentClassName ) ::rtti::Type
 
-#define RTTI_INTERNAL_DECLARE_TYPE_PARENT( ClassName, ParentClassName, Inherits, Virtual, Abstract ) \
+#define RTTI_INTERNAL_DECLARE_TYPE_PARENT( ClassName, ParentClassName, Inherits, Virtual, Abstract, KindName ) \
 public: \
 	using ParentClassType = RTTI_INTERNAL_PARENT_CLASS_TYPE_##Inherits##( ParentClassName ) ; \
 	class Type : public ParentClassType \
@@ -593,6 +600,10 @@ public: \
 		bool InheritsFrom() const \
 		{ \
 			return ::rtti::Type::InheritsFrom< T >(); \
+		} \
+		virtual Kind GetKind() const override \
+		{ \
+			return KindName ; \
 		} \
 		std::unique_ptr< ClassName > Construct() const \
 		{ \
@@ -689,34 +700,36 @@ public: \
 	using ClassType = Type; \
 private:
 
-#define RTTI_INTERNAL_DECLARE_TYPE( ClassName, Virtual ) \
-RTTI_INTERNAL_DECLARE_TYPE_PARENT( ClassName, ::rtti, false, Virtual, false)
+#define RTTI_INTERNAL_DECLARE_TYPE( ClassName, Virtual, Kind ) \
+RTTI_INTERNAL_DECLARE_TYPE_PARENT( ClassName, ::rtti, false, Virtual, false, Kind )
 
-#define RTTI_INTERNAL_DECLARE_TYPE_PARENT_DIRECT( ClassName, ParentClassName, Virtual ) \
+#define RTTI_INTERNAL_DECLARE_TYPE_PARENT_DIRECT( ClassName, ParentClassName, Virtual, Kind ) \
 public: \
 	using Super = ParentClassName; \
-RTTI_INTERNAL_DECLARE_TYPE_PARENT( ClassName, ParentClassName, true, Virtual, false) \
+RTTI_INTERNAL_DECLARE_TYPE_PARENT( ClassName, ParentClassName, true, Virtual, false, Kind ) \
 
 #define RTTI_INTERNAL_EXPAND( x ) x
 
 #define RTTI_INTERNAL_GET_DECLARE_TYPE_MACRO(_1,_2,NAME,...) NAME
 
-#define RTTI_DECLARE_POLYMORPHIC_CLASS(...) RTTI_INTERNAL_EXPAND(RTTI_INTERNAL_GET_DECLARE_TYPE_MACRO(__VA_ARGS__, RTTI_INTERNAL_DECLARE_TYPE_PARENT_DIRECT, RTTI_INTERNAL_DECLARE_TYPE)(__VA_ARGS__, true))
+#define RTTI_DECLARE_POLYMORPHIC_CLASS(...) RTTI_INTERNAL_EXPAND(RTTI_INTERNAL_GET_DECLARE_TYPE_MACRO(__VA_ARGS__, RTTI_INTERNAL_DECLARE_TYPE_PARENT_DIRECT, RTTI_INTERNAL_DECLARE_TYPE)(__VA_ARGS__, true, Kind::Class))
 
-#define RTTI_DECLARE_CLASS(...) RTTI_INTERNAL_EXPAND(RTTI_INTERNAL_GET_DECLARE_TYPE_MACRO(__VA_ARGS__, RTTI_INTERNAL_DECLARE_TYPE_PARENT_DIRECT, RTTI_INTERNAL_DECLARE_TYPE)(__VA_ARGS__, false))
+#define RTTI_DECLARE_TYPE_INTERNAL( Kind, ... ) RTTI_INTERNAL_EXPAND(RTTI_INTERNAL_GET_DECLARE_TYPE_MACRO(__VA_ARGS__, RTTI_INTERNAL_DECLARE_TYPE_PARENT_DIRECT, RTTI_INTERNAL_DECLARE_TYPE)( __VA_ARGS__, false, Kind ))
 
-#define RTTI_DECLARE_STRUCT(...) RTTI_DECLARE_CLASS(__VA_ARGS__) \
+#define RTTI_DECLARE_CLASS(...) RTTI_DECLARE_TYPE_INTERNAL( Kind::Class, __VA_ARGS__ )
+
+#define RTTI_DECLARE_STRUCT(...) RTTI_DECLARE_TYPE_INTERNAL( Kind::Struct, __VA_ARGS__) \
 public:
 
-#define RTTI_INTERNAL_DECLARE_ABSTRACT_TYPE( ClassName ) \
-RTTI_INTERNAL_DECLARE_TYPE_PARENT( ClassName, ::rtti, false, true, true)
+#define RTTI_INTERNAL_DECLARE_ABSTRACT_TYPE( ClassName, Kind ) \
+RTTI_INTERNAL_DECLARE_TYPE_PARENT( ClassName, ::rtti, false, true, true, Kind )
 
-#define RTTI_INTERNAL_DECLARE_ABSTRACT_TYPE_PARENT_DIRECT( ClassName, ParentClassName ) \
+#define RTTI_INTERNAL_DECLARE_ABSTRACT_TYPE_PARENT_DIRECT( ClassName, ParentClassName, Kind ) \
 public: \
 	using Super = ParentClassName; \
-RTTI_INTERNAL_DECLARE_TYPE_PARENT( ClassName, ParentClassName, true, true, true) \
+RTTI_INTERNAL_DECLARE_TYPE_PARENT( ClassName, ParentClassName, true, true, true, Kind ) \
 
-#define RTTI_DECLARE_ABSTRACT_CLASS( ... ) RTTI_INTERNAL_EXPAND( RTTI_INTERNAL_GET_DECLARE_TYPE_MACRO( __VA_ARGS__, RTTI_INTERNAL_DECLARE_ABSTRACT_TYPE_PARENT_DIRECT, RTTI_INTERNAL_DECLARE_ABSTRACT_TYPE )( __VA_ARGS__ ) )
+#define RTTI_DECLARE_ABSTRACT_CLASS( ... ) RTTI_INTERNAL_EXPAND( RTTI_INTERNAL_GET_DECLARE_TYPE_MACRO( __VA_ARGS__, RTTI_INTERNAL_DECLARE_ABSTRACT_TYPE_PARENT_DIRECT, RTTI_INTERNAL_DECLARE_ABSTRACT_TYPE )( __VA_ARGS__, Kind::Class ) )
 #pragma endregion
 
 #pragma region TypeImplementing
@@ -781,6 +794,12 @@ namespace rtti
 				static const DerivedClass& s_typeInstance = ::rtti::RTTI::GetMutable().GetOrRegisterType< DerivedClass >();
 				return s_typeInstance;
 			}
+
+			virtual ::rtti::Type::Kind GetKind() const override
+			{
+				return ::rtti::Type::Kind::Pointer;
+			}
+
 		protected:
 			PointerTypeImplementation()
 				: ParentClass( CalcId(), std::string( GetInternalTypeStatic().GetName() ) + c_namePostfix )
@@ -977,6 +996,11 @@ namespace rtti
 				static_cast< std::pair< T1, T2 >* >( ptr )->~pair< T1, T2 >();
 			}
 
+			virtual ::rtti::Type::Kind GetKind() const override
+			{
+				return ::rtti::Type::Kind::Class;
+			}
+
 		private:
 			static std::array<const Type*, 2> GetInternalTypesStatic()
 			{
@@ -1000,7 +1024,7 @@ namespace rtti
 	{
 	public:
 		virtual const Type& GetInternalType() const = 0;
-
+		virtual Kind GetKind() const override { return Kind::Container; }
 	protected:
 		using Type::Type;
 	};
@@ -1221,7 +1245,7 @@ namespace rtti
 
 		virtual size_t GetAlignment() const override { return alignof( T ); }
 
-		virtual bool IsPrimitive() const override { return true; }
+		virtual Kind GetKind() const override { return Kind::Primitive; }
 
 		static const rtti::PrimitiveType< T >& GetInstance()
 		{
@@ -1303,6 +1327,11 @@ namespace rtti
 		virtual const char* GetName() const override
 		{
 			return m_name.c_str();
+		}
+
+		virtual ::rtti::Type::Kind GetKind() const override
+		{
+			return ::rtti::Type::Kind::RuntimeType;
 		}
 
 		virtual void ConstructInPlace( void* dest ) const override
@@ -1402,6 +1431,11 @@ namespace rtti
 			static_cast< std::shared_ptr< T >* >( ptr )->~shared_ptr< T >();
 		}
 
+		virtual ::rtti::Type::Kind GetKind() const override
+		{
+			return ::rtti::Type::Kind::Pointer;
+		}
+
 	private:
 		static std::array<const Type*, 1> GetInternalTypesStatic()
 		{
@@ -1438,6 +1472,11 @@ namespace rtti
 		virtual void Destroy( void* ptr ) const override
 		{
 			static_cast< std::unique_ptr< T >* >( ptr )->~unique_ptr< T >();
+		}
+
+		virtual ::rtti::Type::Kind GetKind() const override
+		{
+			return ::rtti::Type::Kind::Pointer;
 		}
 
 	private:
