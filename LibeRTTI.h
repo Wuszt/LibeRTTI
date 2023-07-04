@@ -59,6 +59,7 @@
 #include <type_traits>
 #include <string>
 #include <array>
+#include <functional>
 
 #if RTTI_CFG_CREATE_STD_PAIR_TYPE || RTTI_CFG_CREATE_STD_MAP_TYPE
 #include <utility>
@@ -424,8 +425,13 @@ namespace rtti
 			Class,
 			Struct,
 			Primitive,
-			Pointer,
-			Container,
+			RawPointer,
+			UniquePointer,
+			SharedPointer,
+			Array,
+			Vector,
+			Set,
+			Map,
 			RuntimeType,
 		};
 
@@ -797,7 +803,7 @@ namespace rtti
 
 			virtual ::rtti::Type::Kind GetKind() const override
 			{
-				return ::rtti::Type::Kind::Pointer;
+				return ::rtti::Type::Kind::RawPointer;
 			}
 
 		protected:
@@ -969,6 +975,12 @@ namespace rtti
 			friend class MapType< T1, T2 >;
 
 		public:
+			virtual size_t GetPropertiesAmount() const override { return m_properties.size(); }
+			virtual const ::rtti::Property* GetProperty( size_t index ) const override
+			{
+				return m_properties[ index ].get();
+			}
+
 			static constexpr const char* GetBaseName() { return "Pair"; }
 
 			static const typename type_of< T1 >::type& GetFirstInternalTypeStatic()
@@ -1002,10 +1014,19 @@ namespace rtti
 			}
 
 		private:
+			PairType()
+			{
+				using TrueType = std::pair< T1, T2 >;
+				m_properties.emplace_back( Type::CreateProperty< T1 >( "First", offsetof( TrueType, first ) ) );
+				m_properties.emplace_back( Type::CreateProperty< T2 >( "Second", offsetof( TrueType, second ) ) );
+			}
+
 			static std::array<const Type*, 2> GetInternalTypesStatic()
 			{
 				return { &GetFirstInternalTypeStatic(), &GetSecondInternalTypeStatic() };
 			}
+
+			std::vector< std::unique_ptr< ::rtti::Property > > m_properties;
 		};
 	}
 
@@ -1024,17 +1045,26 @@ namespace rtti
 	{
 	public:
 		virtual const Type& GetInternalType() const = 0;
-		virtual Kind GetKind() const override { return Kind::Container; }
+		virtual size_t GetElementsAmount( const void* address ) const = 0;
+		virtual void VisitElements( const void* containerAddress, const std::function< void(const void*) >& visitFunc ) const = 0;
 	protected:
 		using Type::Type;
+	};
+
+	class DynamicContainerType : public ContainerType
+	{
+	public:
+		virtual void EmplaceElement( void* containerAddress, void* elementAddress ) const = 0;
+	protected:
+		using ContainerType::ContainerType;
 	};
 
 	namespace internal
 	{
 		template< class InternalType, class DerivedType, class TrueType >
-		class DynamicContainerTemplateType : public TemplateType< DerivedType, TrueType, ContainerType >
+		class DynamicContainerTemplateType : public TemplateType< DerivedType, TrueType, DynamicContainerType >
 		{
-			friend class TemplateType< DerivedType, TrueType, ContainerType >;
+			friend class TemplateType< DerivedType, TrueType, DynamicContainerType >;
 
 		public:
 			static const InternalType& GetInternalTypeStatic()
@@ -1045,6 +1075,14 @@ namespace rtti
 			virtual const InternalType& GetInternalType() const override
 			{
 				return InternalType::GetInstance();
+			}
+
+			virtual void VisitElements( const void* containerAddress, const std::function< void(const void*) >& visitFunc ) const override
+			{
+				for ( const auto& element : *static_cast< const TrueType* >( containerAddress ) )
+				{
+					visitFunc( &element );
+				}
 			}
 
 		private:
@@ -1094,6 +1132,16 @@ namespace rtti
 			return m_name.c_str();
 		}
 
+		virtual Kind GetKind() const override 
+		{ 
+			return Kind::Array; 
+		}
+
+		virtual size_t GetElementsAmount( const void* address ) const override
+		{
+			return Count;
+		}
+
 		void ConstructInPlace( void* dest ) const override
 		{
 			T* arr = static_cast< T* >( dest );
@@ -1102,6 +1150,12 @@ namespace rtti
 			{
 				GetInternalType().ConstructInPlace( &arr[ i ] );
 			}
+		}
+
+		virtual size_t GetPropertiesAmount() const override { return m_properties.size(); }
+		virtual const ::rtti::Property* GetProperty( size_t index ) const override
+		{
+			return m_properties[ index ].get();
 		}
 
 #if RTTI_REQUIRE_MOVE_CTOR
@@ -1137,6 +1191,16 @@ namespace rtti
 			return alignof( T );
 		}
 
+		virtual void VisitElements( const void* containerAddress, const std::function< void(const void*) >& visitFunc ) const override
+		{
+			const T* arr = static_cast< const T* >( containerAddress );
+
+			for ( size_t i = 0u; i < Count; ++i )
+			{
+				visitFunc( arr + i );
+			}
+		}
+
 	private:
 		ArrayType()
 			: ContainerType( CalcId() )
@@ -1146,8 +1210,17 @@ namespace rtti
 			m_name += "[";
 			m_name += std::to_string( Count );
 			m_name += "]";
+
+			for ( size_t i = 0u; i < Count; ++i )
+			{
+				std::string name = "[";
+				name += std::to_string( i );
+				name += "]";
+				m_properties.emplace_back( Type::CreateProperty< T >( name.c_str(), i * sizeof( T ) ) );
+			}
 		}
 
+		std::vector< std::unique_ptr< ::rtti::Property > > m_properties;
 		std::string m_name;
 	};
 }
@@ -1164,9 +1237,24 @@ namespace rtti
 	public:
 		static constexpr const char* GetBaseName() { return "Vector"; }
 
+		virtual size_t GetElementsAmount( const void* address ) const override
+		{
+			return static_cast< const std::vector< T >* >( address )->size();
+		}
+
 		virtual void Destroy( void* ptr ) const override
 		{
 			static_cast< std::vector< T >* >( ptr )->~vector< T >();
+		}
+
+		virtual ::rtti::Type::Kind GetKind() const override
+		{
+			return ::rtti::Type::Kind::Vector;
+		}
+
+		virtual void EmplaceElement( void* containerAddress, void* elementAddress ) const override
+		{
+			static_cast< std::vector< T >* >( containerAddress )->emplace_back( std::move( *static_cast< T* >( elementAddress ) ) );
 		}
 	};
 }
@@ -1183,9 +1271,24 @@ namespace rtti
 	public:
 		static constexpr const char* GetBaseName() { return "Set"; }
 
+		virtual size_t GetElementsAmount( const void* address ) const override
+		{
+			return static_cast< const std::unordered_set< T >* >( address )->size();
+		}
+
 		virtual void Destroy( void* ptr ) const override
 		{
 			static_cast< std::unordered_set< T >* >( ptr )->~unordered_set< T >();
+		}
+
+		virtual ::rtti::Type::Kind GetKind() const override
+		{
+			return ::rtti::Type::Kind::Set;
+		}
+
+		virtual void EmplaceElement( void* containerAddress, void* elementAddress ) const override
+		{
+			static_cast< std::unordered_set< T >* >( containerAddress )->emplace( std::move( *static_cast< T* >( elementAddress ) ) );
 		}
 	};
 }
@@ -1198,7 +1301,7 @@ namespace rtti
 	template< class TKey, class TValue >
 	class MapType : public internal::DynamicContainerTemplateType< internal::PairType< TKey, TValue >, MapType< TKey, TValue >, std::unordered_map< TKey, TValue > >
 	{
-		friend class internal::TemplateType< MapType, std::unordered_map< TKey, TValue >, ContainerType >;
+		friend class internal::TemplateType< MapType, std::unordered_map< TKey, TValue >, DynamicContainerType >;
 
 	public:
 		static constexpr const char* GetBaseName() { return "Map"; }
@@ -1206,6 +1309,22 @@ namespace rtti
 		virtual void Destroy( void* ptr ) const override
 		{
 			static_cast< std::unordered_map< TKey, TValue >* >( ptr )->~unordered_map< TKey, TValue >();
+		}
+
+		virtual size_t GetElementsAmount( const void* address ) const override
+		{
+			return static_cast< const std::unordered_map< TKey, TValue >* >( address )->size();
+		}
+
+		virtual ::rtti::Type::Kind GetKind() const override
+		{
+			return ::rtti::Type::Kind::Map;
+		}
+
+		virtual void EmplaceElement( void* containerAddress, void* elementAddress ) const override
+		{
+			const std::pair< TKey, TValue >&& pair = std::move( *static_cast< std::pair< TKey, TValue >* >( elementAddress ) );
+			static_cast< std::unordered_map< TKey, TValue >* >( containerAddress )->emplace( pair.first, pair.second );
 		}
 
 	private:
@@ -1433,7 +1552,7 @@ namespace rtti
 
 		virtual ::rtti::Type::Kind GetKind() const override
 		{
-			return ::rtti::Type::Kind::Pointer;
+			return ::rtti::Type::Kind::SharedPointer;
 		}
 
 	private:
@@ -1476,7 +1595,7 @@ namespace rtti
 
 		virtual ::rtti::Type::Kind GetKind() const override
 		{
-			return ::rtti::Type::Kind::Pointer;
+			return ::rtti::Type::Kind::UniquePointer;
 		}
 
 	private:
