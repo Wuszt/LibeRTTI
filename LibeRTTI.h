@@ -486,7 +486,7 @@ namespace rtti
 		virtual void MoveInPlace( void* dest, void* src ) const = 0
 		{}
 #endif
-		virtual void Destroy( void* ptr ) const = 0
+		virtual void Destroy( void* address ) const = 0
 		{}
 
 		virtual bool IsAbstract() const
@@ -620,9 +620,9 @@ public: \
 			RTTI_INTERNAL_CONSTRUCT_IN_PLACE_BODY_##Abstract##( ClassName, dest )\
 		} \
 		RTTI_INTERNAL_MOVE_IN_PLACE_##Abstract##( ClassName ) \
-		virtual void Destroy( void* ptr ) const override \
+		virtual void Destroy( void* address ) const override \
 		{ \
-			static_cast< ClassName##* >( ptr )->~##ClassName##(); \
+			static_cast< ClassName##* >( address )->~##ClassName##(); \
 		} \
 		virtual bool IsAbstract() const override \
 		{ \
@@ -844,7 +844,7 @@ namespace rtti
 		}
 #endif
 
-		virtual void Destroy( void* ptr ) const override {}
+		virtual void Destroy( void* address ) const override {}
 		virtual size_t GetSize() const override { return sizeof( void* ); }
 		virtual size_t GetAlignment() const override { return alignof( void* ); }
 
@@ -1003,9 +1003,9 @@ namespace rtti
 				return GetSecondInternalTypeStatic();
 			}
 
-			virtual void Destroy( void* ptr ) const override
+			virtual void Destroy( void* address ) const override
 			{
-				static_cast< std::pair< T1, T2 >* >( ptr )->~pair< T1, T2 >();
+				static_cast< std::pair< T1, T2 >* >( address )->~pair< T1, T2 >();
 			}
 
 			virtual ::rtti::Type::Kind GetKind() const override
@@ -1171,9 +1171,9 @@ namespace rtti
 		}
 #endif
 
-		void Destroy( void* ptr ) const override
+		void Destroy( void* address ) const override
 		{
-			T* arr = static_cast< T* >( ptr );
+			T* arr = static_cast< T* >( address );
 
 			for ( size_t i = 0u; i < Count; ++i )
 			{
@@ -1242,9 +1242,9 @@ namespace rtti
 			return static_cast< const std::vector< T >* >( address )->size();
 		}
 
-		virtual void Destroy( void* ptr ) const override
+		virtual void Destroy( void* address ) const override
 		{
-			static_cast< std::vector< T >* >( ptr )->~vector< T >();
+			static_cast< std::vector< T >* >( address )->~vector< T >();
 		}
 
 		virtual ::rtti::Type::Kind GetKind() const override
@@ -1276,9 +1276,9 @@ namespace rtti
 			return static_cast< const std::unordered_set< T >* >( address )->size();
 		}
 
-		virtual void Destroy( void* ptr ) const override
+		virtual void Destroy( void* address ) const override
 		{
-			static_cast< std::unordered_set< T >* >( ptr )->~unordered_set< T >();
+			static_cast< std::unordered_set< T >* >( address )->~unordered_set< T >();
 		}
 
 		virtual ::rtti::Type::Kind GetKind() const override
@@ -1306,9 +1306,9 @@ namespace rtti
 	public:
 		static constexpr const char* GetBaseName() { return "Map"; }
 
-		virtual void Destroy( void* ptr ) const override
+		virtual void Destroy( void* address ) const override
 		{
-			static_cast< std::unordered_map< TKey, TValue >* >( ptr )->~unordered_map< TKey, TValue >();
+			static_cast< std::unordered_map< TKey, TValue >* >( address )->~unordered_map< TKey, TValue >();
 		}
 
 		virtual size_t GetElementsAmount( const void* address ) const override
@@ -1358,7 +1358,7 @@ namespace rtti
 			std::memcpy( dest, src, sizeof( T ) );
 		}
 #endif
-		virtual void Destroy( void* ptr ) const override {}
+		virtual void Destroy( void* address ) const override {}
 
 		virtual size_t GetSize() const override { return sizeof( T ); }
 
@@ -1475,13 +1475,13 @@ namespace rtti
 		}
 #endif
 
-		virtual void Destroy( void* ptr ) const override
+		virtual void Destroy( void* address ) const override
 		{
-			ParentType::Destroy( ptr );
+			ParentType::Destroy( address );
 			for ( const auto& property : m_properties )
 			{
 				const auto& type = property->GetType();
-				type.Destroy( static_cast< uint8_t* >( ptr ) + property->GetOffset() );
+				type.Destroy( static_cast< uint8_t* >( address ) + property->GetOffset() );
 			}
 		}
 
@@ -1545,9 +1545,9 @@ namespace rtti
 			return GetInternalTypeStatic();
 		}
 
-		virtual void Destroy( void* ptr ) const override
+		virtual void Destroy( void* address ) const override
 		{
-			static_cast< std::shared_ptr< T >* >( ptr )->~shared_ptr< T >();
+			static_cast< std::shared_ptr< T >* >( address )->~shared_ptr< T >();
 		}
 
 		virtual ::rtti::Type::Kind GetKind() const override
@@ -1569,33 +1569,56 @@ namespace rtti
 #if RTTI_CFG_CREATE_STD_UNIQUEPTR_TYPE
 namespace rtti
 {
-	template< class T >
-	class UniquePtrType : public internal::TemplateType< UniquePtrType< T >, std::unique_ptr< T >, rtti::Type >
+	class UniquePtrBaseType : public rtti::Type
 	{
-		friend class ::rtti::RTTI;
-		friend class internal::TemplateType< UniquePtrType< T >, std::unique_ptr< T >, rtti::Type >;
-
 	public:
 		static constexpr const char* GetBaseName() { return "UniquePtr"; }
 
+		virtual ::rtti::Type::Kind GetKind() const override
+		{
+			return ::rtti::Type::Kind::UniquePointer;
+		}
+
+		virtual void* GetPointedAddress( void* address ) const = 0;
+		virtual void SetPointedgAddress( void* address, void* pointedAddress ) const = 0;
+
+		virtual const Type& GetInternalType() const = 0;
+
+	protected:
+		using rtti::Type::Type;
+	};
+
+	template< class T >
+	class UniquePtrType : public internal::TemplateType< UniquePtrType< T >, std::unique_ptr< T >, UniquePtrBaseType >
+	{
+		friend class ::rtti::RTTI;
+		friend class internal::TemplateType< UniquePtrType< T >, std::unique_ptr< T >, UniquePtrBaseType >;
+
+	public:
 		static const typename type_of< T >::type& GetInternalTypeStatic()
 		{
 			return GetTypeInstanceOf< T >();
 		}
 
-		const typename type_of< T >::type& GetInternalType() const
+		virtual const typename type_of< T >::type& GetInternalType() const override
 		{
 			return GetInternalTypeStatic();
 		}
 
-		virtual void Destroy( void* ptr ) const override
+		virtual void Destroy( void* address ) const override
 		{
-			static_cast< std::unique_ptr< T >* >( ptr )->~unique_ptr< T >();
+			static_cast< std::unique_ptr< T >* >( address )->~unique_ptr< T >();
 		}
 
-		virtual ::rtti::Type::Kind GetKind() const override
+		virtual void* GetPointedAddress( void* address ) const override
 		{
-			return ::rtti::Type::Kind::UniquePointer;
+			return static_cast< std::unique_ptr< T >* >( address )->get();
+		}
+
+		virtual void SetPointedgAddress( void* address, void* pointedAddress ) const
+		{
+			auto* ptr = static_cast< std::unique_ptr< T >* >( address );
+			*ptr = std::unique_ptr< T >( static_cast< T* >( pointedAddress ) );
 		}
 
 	private:
