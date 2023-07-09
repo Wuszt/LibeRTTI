@@ -379,10 +379,21 @@ namespace rtti
 			return static_cast< char* >( owner ) + GetOffset();
 		}
 
+		const void* GetAddress( const void* owner ) const
+		{
+			return static_cast< const char* >( owner ) + GetOffset();
+		}
+
 		template< class T >
 		T& GetValue( void* owner ) const
 		{
 			return *( static_cast< T* >( GetAddress( owner ) ) );
+		}
+
+		template< class T >
+		const T& GetValue( const void* owner ) const
+		{
+			return *( static_cast< const T* >( GetAddress( owner ) ) );
 		}
 
 		template< class T >
@@ -1605,6 +1616,7 @@ namespace rtti
 		}
 
 		virtual void* GetPointedAddress( void* address ) const = 0;
+		virtual const void* GetPointedAddress( const void* address ) const = 0;
 		virtual void SetPointedAddress( void* address, void* pointedAddress ) const = 0;
 
 		virtual const Type& GetInternalType() const = 0;
@@ -1638,6 +1650,11 @@ namespace rtti
 		virtual void* GetPointedAddress( void* address ) const override
 		{
 			return static_cast< std::unique_ptr< T >* >( address )->get();
+		}
+
+		virtual const void* GetPointedAddress( const void* address ) const override
+		{
+			return static_cast< const std::unique_ptr< T >* >( address )->get();
 		}
 
 		virtual void SetPointedAddress( void* address, void* pointedAddress ) const
