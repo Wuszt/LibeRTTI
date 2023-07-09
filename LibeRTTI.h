@@ -77,6 +77,8 @@
 #pragma region ForwardDeclarations
 namespace rtti
 {
+	using uint64 = unsigned __int64;
+
 	class Type;
 	template< class T, class T2 = void > class PointerType;
 	template< class T > class VectorType;
@@ -86,7 +88,7 @@ namespace rtti
 	template< class T > class PrimitiveType;
 	template< class T > class SharedPtrType;
 	template< class T > class UniquePtrType;
-	using TypeId = size_t;
+	using TypeId = uint64;
 
 	namespace internal
 	{
@@ -225,9 +227,9 @@ namespace rtti
 	namespace internal
 	{
 		// Java's hashCode for String
-		static constexpr size_t CalcHash( const char* name, size_t seed = 0u )
+		static constexpr uint64 CalcHash( const char* name, uint64 seed = 0u )
 		{
-			for ( size_t i = 0u; name[ i ] != 0; ++i )
+			for ( uint64 i = 0u; name[ i ] != 0; ++i )
 			{
 				seed = name[ i ] + seed * 31;
 			}
@@ -1526,21 +1528,38 @@ namespace rtti
 #if RTTI_CFG_CREATE_STD_SHAREDPTR_TYPE
 namespace rtti
 {
-	template< class T >
-	class SharedPtrType : public internal::TemplateType< SharedPtrType< T >, std::shared_ptr< T >, rtti::Type >
+	class SharedPtrBaseType : public rtti::Type
 	{
-		friend class ::rtti::RTTI;
-		friend class internal::TemplateType< SharedPtrType, std::shared_ptr< T >, rtti::Type >;
-
 	public:
 		static constexpr const char* GetBaseName() { return "SharedPtr"; }
 
+		virtual ::rtti::Type::Kind GetKind() const override
+		{
+			return ::rtti::Type::Kind::SharedPointer;
+		}
+
+		virtual void* GetPointedAddress( void* address ) const = 0;
+		virtual void SetPointedAddress( void* address, void* pointedAddress ) const = 0;
+
+		virtual const Type& GetInternalType() const = 0;
+
+	protected:
+		using rtti::Type::Type;
+	};
+
+	template< class T >
+	class SharedPtrType : public internal::TemplateType< SharedPtrType< T >, std::shared_ptr< T >, rtti::SharedPtrBaseType >
+	{
+		friend class ::rtti::RTTI;
+		friend class internal::TemplateType< SharedPtrType, std::shared_ptr< T >, rtti::SharedPtrBaseType >;
+
+	public:
 		static const typename type_of< T >::type& GetInternalTypeStatic()
 		{
 			return GetTypeInstanceOf< T >();
 		}
 
-		const typename type_of< T >::type& GetInternalType() const
+		virtual const typename type_of< T >::type& GetInternalType() const override
 		{
 			return GetInternalTypeStatic();
 		}
@@ -1550,9 +1569,15 @@ namespace rtti
 			static_cast< std::shared_ptr< T >* >( address )->~shared_ptr< T >();
 		}
 
-		virtual ::rtti::Type::Kind GetKind() const override
+		virtual void* GetPointedAddress( void* address ) const override
 		{
-			return ::rtti::Type::Kind::SharedPointer;
+			return static_cast< std::shared_ptr< T >* >( address )->get();
+		}
+
+		virtual void SetPointedAddress( void* address, void* pointedAddress ) const
+		{
+			auto* ptr = static_cast< std::shared_ptr< T >* >( address );
+			*ptr = std::shared_ptr< T >( static_cast< T* >( pointedAddress ) );
 		}
 
 	private:
@@ -1580,7 +1605,7 @@ namespace rtti
 		}
 
 		virtual void* GetPointedAddress( void* address ) const = 0;
-		virtual void SetPointedgAddress( void* address, void* pointedAddress ) const = 0;
+		virtual void SetPointedAddress( void* address, void* pointedAddress ) const = 0;
 
 		virtual const Type& GetInternalType() const = 0;
 
@@ -1615,7 +1640,7 @@ namespace rtti
 			return static_cast< std::unique_ptr< T >* >( address )->get();
 		}
 
-		virtual void SetPointedgAddress( void* address, void* pointedAddress ) const
+		virtual void SetPointedAddress( void* address, void* pointedAddress ) const
 		{
 			auto* ptr = static_cast< std::unique_ptr< T >* >( address );
 			*ptr = std::unique_ptr< T >( static_cast< T* >( pointedAddress ) );
