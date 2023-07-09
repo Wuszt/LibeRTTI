@@ -88,7 +88,7 @@ namespace rtti
 	template< class T > class PrimitiveType;
 	template< class T > class SharedPtrType;
 	template< class T > class UniquePtrType;
-	using TypeId = uint64;
+	using ID = uint64;
 
 	namespace internal
 	{
@@ -245,7 +245,7 @@ namespace rtti
 
 			template <typename U, U> struct really_has;
 
-			template<typename C> static yes& Test( really_has < TypeId(), &C::CalcId >* );
+			template<typename C> static yes& Test( really_has < ID(), &C::CalcId >* );
 			template<typename> static no& Test( ... );
 
 		public:
@@ -290,7 +290,7 @@ namespace rtti
 		template< class T, class... TArgs, std::enable_if_t< internal::has_CalcId< T >::value, bool > = true >
 		T& GetOrRegisterType( const TArgs& ... args )
 		{
-			TypeId id = T::CalcId( args... );
+			ID id = T::CalcId( args... );
 			auto found = m_types.find( id );
 
 			if ( found != m_types.end() )
@@ -325,7 +325,7 @@ namespace rtti
 			return static_cast< T& >( *currentInstance->second );
 		}
 
-		const Type* FindType( TypeId id ) const
+		const Type* FindType( ID id ) const
 		{
 			auto found = m_types.find( id );
 			if ( found != m_types.end() )
@@ -338,12 +338,12 @@ namespace rtti
 
 		const Type* FindType( const char* name ) const
 		{
-			TypeId id = internal::CalcHash( name );
+			ID id = internal::CalcHash( name );
 			return FindType( id );
 		}
 
 	private:
-		std::unordered_map< TypeId, std::unique_ptr< Type > > m_types;
+		std::unordered_map< ID, std::unique_ptr< Type > > m_types;
 	};
 
 	static auto Get = RTTI::Get;
@@ -369,7 +369,7 @@ namespace rtti
 			return m_offset;
 		}
 
-		virtual TypeId GetID() const
+		virtual ID GetID() const
 		{
 			return m_id;
 		}
@@ -406,7 +406,7 @@ namespace rtti
 
 	private:
 		const char* m_name = nullptr;
-		TypeId m_id = 0u;
+		ID m_id = 0u;
 		size_t m_offset = 0u;
 		const Type& m_type;
 	};
@@ -501,7 +501,7 @@ namespace rtti
 			return false;
 		}
 
-		TypeId GetID() const
+		ID GetID() const
 		{
 			return m_id;
 		}
@@ -539,7 +539,7 @@ namespace rtti
 			: Type( internal::CalcHash( name ) )
 		{}
 
-		Type( TypeId id )
+		Type( ID id )
 			: m_id( id )
 		{}
 
@@ -560,7 +560,7 @@ namespace rtti
 		}
 
 	private:
-		TypeId m_id = 0u;
+		ID m_id = 0u;
 	};
 }
 #pragma endregion
@@ -781,9 +781,9 @@ namespace rtti
 			friend class ::rtti::RTTI;
 			static constexpr const char* c_namePostfix = "*";
 		public:
-			static TypeId CalcId()
+			static ID CalcId()
 			{
-				TypeId id = internal::CalcHash( GetInternalTypeStatic().GetName() );
+				ID id = internal::CalcHash( GetInternalTypeStatic().GetName() );
 				return internal::CalcHash( c_namePostfix, id );
 			}
 
@@ -813,7 +813,7 @@ namespace rtti
 				: ParentClass( CalcId(), std::string( GetInternalTypeStatic().GetName() ) + c_namePostfix )
 			{}
 
-			PointerTypeImplementation( TypeId typeId, std::string&& name )
+			PointerTypeImplementation( ID typeId, std::string&& name )
 				: ParentClass( typeId, std::move( name ) )
 			{}
 		};
@@ -853,7 +853,7 @@ namespace rtti
 		virtual const char* GetName() const override { return m_strName.c_str(); }
 
 	protected:
-		PointerType( TypeId typeId, std::string&& name )
+		PointerType( ID typeId, std::string&& name )
 			: Type( typeId )
 			, m_strName( std::move( name ) )
 		{}
@@ -882,9 +882,9 @@ namespace rtti
 			friend class ::rtti::RTTI;
 
 		public:
-			static TypeId CalcId()
+			static ID CalcId()
 			{
-				TypeId id = internal::CalcHash( DerivedType::GetBaseName() );
+				ID id = internal::CalcHash( DerivedType::GetBaseName() );
 				id = internal::CalcHash( "< ", id );
 				const auto internalTypes = DerivedType::GetInternalTypesStatic();
 				id = internal::CalcHash( internalTypes[0u]->GetName(), id);
@@ -1106,9 +1106,9 @@ namespace rtti
 		friend class ::rtti::RTTI;
 
 	public:
-		static TypeId CalcId()
+		static ID CalcId()
 		{
-			TypeId id = internal::CalcHash( GetInternalTypeStatic().GetName() );
+			ID id = internal::CalcHash( GetInternalTypeStatic().GetName() );
 			id = internal::CalcHash( "[", id );
 			id = internal::CalcHash( std::to_string( Count ).c_str(), id );
 			return internal::CalcHash( "]", id );
