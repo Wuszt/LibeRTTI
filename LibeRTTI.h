@@ -1550,7 +1550,9 @@ namespace rtti
 		}
 
 		virtual void* GetPointedAddress( void* address ) const = 0;
+		virtual const void* GetPointedAddress( const void* address ) const = 0;
 		virtual void SetPointedAddress( void* address, void* pointedAddress ) const = 0;
+		virtual void AssignSharedPtr( void* src, void* dest ) const = 0;
 
 		virtual const Type& GetInternalType() const = 0;
 
@@ -1585,10 +1587,22 @@ namespace rtti
 			return static_cast< std::shared_ptr< T >* >( address )->get();
 		}
 
+		virtual const void* GetPointedAddress( const void* address ) const override
+		{
+			return static_cast< const std::shared_ptr< T >* >( address )->get();
+		}
+
 		virtual void SetPointedAddress( void* address, void* pointedAddress ) const
 		{
 			auto* ptr = static_cast< std::shared_ptr< T >* >( address );
 			*ptr = std::shared_ptr< T >( static_cast< T* >( pointedAddress ) );
+		}
+
+		virtual void AssignSharedPtr( void* src, void* dest ) const
+		{
+			std::shared_ptr< T >* srcShared = static_cast< std::shared_ptr< T >* >( src );
+			std::shared_ptr< T >* destShared = static_cast< std::shared_ptr< T >* >( dest );
+			*destShared = *srcShared;
 		}
 
 	private:
