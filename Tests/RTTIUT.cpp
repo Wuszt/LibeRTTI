@@ -298,12 +298,10 @@ TEST( TestCaseName, Size )
 TEST( TestCaseName, AreNonPrimitiveTypesRegistered )
 {
 	Bool anyNonPrimitives = false;
-	std::vector< const ::rtti::Type* > types;
-	::rtti::Get().GetTypes( types );
-	for ( const ::rtti::Type* type : types )
-	{
-		anyNonPrimitives |= type->GetKind() != rtti::Type::Kind::Primitive;
-	}
+	::rtti::Get().VisitTypes( [ & ]( const ::rtti::Type& type )
+		{
+			anyNonPrimitives |= type.GetKind() != rtti::Type::Kind::Primitive;
+		} );
 
 	EXPECT_TRUE( anyNonPrimitives );
 }
@@ -311,8 +309,7 @@ TEST( TestCaseName, AreNonPrimitiveTypesRegistered )
 TEST( TestCaseName, ArePrimitiveTypesRegistered )
 {
 	Bool anyPrimitives = false;
-	std::vector< const ::rtti::Type* > types;
-	::rtti::Get().GetTypes( types );
+	std::vector< const ::rtti::Type* > types = ::rtti::Get().GetTypes();
 	for ( const ::rtti::Type* type : types )
 	{
 		anyPrimitives |= type->GetKind() == rtti::Type::Kind::Primitive;
@@ -347,13 +344,11 @@ TEST( TestCaseName, PrimitiveTypesSizes )
 TEST( TestCaseName, TypesUniqueIDs )
 {
 	std::unordered_set< Uint64 > ids;
-	std::vector< const ::rtti::Type* > types;
-	::rtti::Get().GetTypes( types );
-	for ( const ::rtti::Type* type : types )
-	{
-		EXPECT_FALSE( ids.contains( type->GetID() ) );
-		ids.emplace( type->GetID() );
-	}
+	::rtti::Get().VisitTypes( [ & ]( const ::rtti::Type& type )
+		{
+			EXPECT_FALSE( ids.contains( type.GetID() ) );
+			ids.emplace( type.GetID() );
+		} );
 }
 
 TEST( TestCaseName, PersistentTypesIds )

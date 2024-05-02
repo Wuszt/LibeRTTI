@@ -261,12 +261,24 @@ namespace rtti
 	class RTTI
 	{
 	public:
-		void GetTypes( std::vector< const Type* >& outTypes ) const
+		std::vector< const Type* > GetTypes() const
 		{
-			outTypes.reserve( m_types.size() );
-			for ( const auto& entry : m_types )
+			std::vector< const Type* > types;
+			types.reserve( m_types.size() );
+			for ( const auto& type : m_types )
 			{
-				outTypes.emplace_back( entry.second.get() );
+				types.emplace_back( type.get() );
+			}
+
+			return types;
+		}
+
+		template< class TFunc >
+		void VisitTypes( const TFunc& visitFunc ) const
+		{
+			for ( const auto& typePtr : m_types )
+			{
+				visitFunc( *typePtr );
 			}
 		}
 
@@ -291,15 +303,16 @@ namespace rtti
 		T& GetOrRegisterType( const TArgs& ... args )
 		{
 			ID id = T::CalcId( args... );
-			auto found = m_types.find( id );
+			auto found = m_typesLUT.find( id );
 
-			if ( found != m_types.end() )
+			if ( found != m_typesLUT.end() )
 			{
 				return static_cast< T& >( *found->second );
 			}
 
 			T* instance = new T( std::forward< const TArgs& >( args )... );
-			m_types.emplace( id, instance );
+			m_types.emplace_back( instance );
+			m_typesLUT.emplace( id, instance );
 
 			instance->OnRegistered();
 
@@ -311,12 +324,13 @@ namespace rtti
 		{
 			std::unique_ptr< T > instance( new T( std::forward< const TArgs& >( args )... ) );
 
-			auto currentInstance = m_types.find( instance->GetID() );
+			auto currentInstance = m_typesLUT.find( instance->GetID() );
 
-			if ( currentInstance == m_types.end() )
+			if ( currentInstance == m_typesLUT.end() )
 			{
 				T& result = *instance;
-				currentInstance = m_types.emplace( instance->GetID(), std::move( instance ) ).first;
+				m_typesLUT.emplace( instance->GetID(), instance.get() );
+				m_types.emplace_back( std::move( instance ) );
 
 				result.OnRegistered();
 				return result;
@@ -327,10 +341,10 @@ namespace rtti
 
 		const Type* FindType( ID id ) const
 		{
-			auto found = m_types.find( id );
-			if ( found != m_types.end() )
+			auto found = m_typesLUT.find( id );
+			if ( found != m_typesLUT.end() )
 			{
-				return found->second.get();
+				return found->second;
 			}
 
 			return nullptr;
@@ -343,7 +357,8 @@ namespace rtti
 		}
 
 	private:
-		std::unordered_map< ID, std::unique_ptr< Type > > m_types;
+		std::unordered_map< ID, Type* > m_typesLUT;
+		std::vector< std::unique_ptr< Type > > m_types;
 	};
 
 	static auto Get = RTTI::Get;
@@ -1059,7 +1074,7 @@ namespace rtti
 	public:
 		virtual const Type& GetInternalType() const = 0;
 		virtual size_t GetElementsAmount( const void* address ) const = 0;
-		virtual void VisitElements( const void* containerAddress, const std::function< void(const void*) >& visitFunc ) const = 0;
+		virtual void VisitElements( const void* containerAddress, const std::function< void( const void* ) >& visitFunc ) const = 0;
 	protected:
 		using Type::Type;
 	};
