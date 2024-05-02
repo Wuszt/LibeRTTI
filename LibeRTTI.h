@@ -619,6 +619,7 @@ namespace rtti
 #define RTTI_INTERNAL_PARENT_CLASS_TYPE_false( ParentClassName ) ::rtti::Type
 
 #define RTTI_INTERNAL_DECLARE_TYPE_PARENT( ClassName, ParentClassName, Inherits, Virtual, Abstract, KindName ) \
+using This = ClassName; \
 public: \
 	using ParentClassType = RTTI_INTERNAL_PARENT_CLASS_TYPE_##Inherits##( ParentClassName ) ; \
 	class Type : public ParentClassType \
@@ -731,7 +732,6 @@ public: \
 	{ \
 		RTTI_INTERNAL_INHERITS_FROM_STATIC_BODY_##Inherits; \
 	} \
-	using ClassType = Type; \
 private:
 
 #define RTTI_INTERNAL_DECLARE_TYPE( ClassName, Virtual, Kind ) \
