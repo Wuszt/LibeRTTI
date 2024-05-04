@@ -127,6 +127,24 @@ TEST( TestCaseName, InheritsFrom )
 	EXPECT_FALSE( aPtr->InheritsFrom< AA >() );
 }
 
+TEST( TestCaseName, GetParent )
+{
+	A a;
+	AA aa;
+	AAA aaa;
+
+	BB bb;
+	BBB bbb;
+
+	EXPECT_TRUE( A::GetTypeStatic().GetParent() == nullptr );
+	EXPECT_TRUE( AA::GetTypeStatic().GetParent() == &A::GetTypeStatic() );
+	EXPECT_TRUE( AAA::GetTypeStatic().GetParent() == &AA::GetTypeStatic() );
+	EXPECT_FALSE( A::GetTypeStatic().GetParent(), &B::GetTypeStatic() );
+
+	EXPECT_TRUE( B::GetTypeStatic().GetParent() == nullptr );
+	EXPECT_TRUE( BB::GetTypeStatic().GetParent() == &B::GetTypeStatic() );
+}
+
 TEST( TestCaseName, InheritsFromOrIsA )
 {
 	EXPECT_TRUE( A::InheritsFromOrIsAStatic< A >() );
@@ -838,7 +856,3 @@ TEST( TestCaseName, UniquePtrs )
 	EXPECT_EQ( type.GetInternalType(), ::rtti::GetTypeInstanceOf< std::unique_ptr< Float > >() );
 	EXPECT_EQ( type.GetInternalType().GetInternalType(), ::rtti::GetTypeInstanceOf < Float >() );
 }
-
-
-//todo:
-// smart pointery...

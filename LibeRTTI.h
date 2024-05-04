@@ -505,6 +505,11 @@ namespace rtti
 			return !(*this == rhl);
 		}
 
+		virtual const Type* GetParent() const
+		{
+			return nullptr;
+		}
+
 		virtual Kind GetKind() const = 0;
 
 		virtual void ConstructInPlace( void* dest ) const = 0
@@ -618,6 +623,9 @@ namespace rtti
 #define RTTI_INTERNAL_PARENT_CLASS_TYPE_true( ParentClassName ) ParentClassName::Type
 #define RTTI_INTERNAL_PARENT_CLASS_TYPE_false( ParentClassName ) ::rtti::Type
 
+#define RTTI_INTERNAL_GET_PARENT_true( ParentClassName ) virtual const rtti::Type* GetParent() const override { return &ParentClassName::GetTypeStatic(); }
+#define RTTI_INTERNAL_GET_PARENT_false( ParentClassName ) 
+
 #define RTTI_INTERNAL_DECLARE_TYPE_PARENT( ClassName, ParentClassName, Inherits, Virtual, Abstract, KindName ) \
 using This = ClassName; \
 public: \
@@ -640,6 +648,7 @@ public: \
 		{ \
 			return KindName ; \
 		} \
+		RTTI_INTERNAL_GET_PARENT_##Inherits##( ParentClassName ) \
 		std::unique_ptr< ClassName > Construct() const \
 		{ \
 			return std::unique_ptr< ClassName >( Construct_Internal() ); \
