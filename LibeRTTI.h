@@ -1083,7 +1083,9 @@ namespace rtti
 	public:
 		virtual const Type& GetInternalType() const = 0;
 		virtual size_t GetElementsAmount( const void* address ) const = 0;
-		virtual void VisitElements( const void* containerAddress, const std::function< void( const void* ) >& visitFunc ) const = 0;
+
+		virtual void VisitElementsAsProperties( const void* containerAddress, const std::function< void( const rtti::Property& ) >& visitFunc ) const = 0;
+
 	protected:
 		using Type::Type;
 	};
@@ -1114,11 +1116,16 @@ namespace rtti
 				return InternalType::GetInstance();
 			}
 
-			virtual void VisitElements( const void* containerAddress, const std::function< void(const void*) >& visitFunc ) const override
+			virtual void VisitElementsAsProperties( const void* containerAddress, const std::function< void( const rtti::Property& ) >& visitFunc ) const override
 			{
+				size_t i = 0u;
 				for ( const auto& element : *static_cast< const TrueType* >( containerAddress ) )
 				{
-					visitFunc( &element );
+					std::string name = "[";
+					name += std::to_string( i );
+					name += "]";
+					visitFunc( *Type::CreateProperty( name.c_str(), reinterpret_cast< const uint8_t* >( &element ) - reinterpret_cast< const uint8_t* >( containerAddress ), GetInternalType() ) );
+					++i;
 				}
 			}
 
@@ -1189,12 +1196,6 @@ namespace rtti
 			}
 		}
 
-		virtual size_t GetPropertiesAmount() const override { return m_properties.size(); }
-		virtual const ::rtti::Property* GetProperty( size_t index ) const override
-		{
-			return m_properties[ index ].get();
-		}
-
 #if RTTI_REQUIRE_MOVE_CTOR
 		virtual void MoveInPlace( void* dest, void* src ) const override
 		{
@@ -1228,13 +1229,14 @@ namespace rtti
 			return alignof( T );
 		}
 
-		virtual void VisitElements( const void* containerAddress, const std::function< void(const void*) >& visitFunc ) const override
+		virtual void VisitElementsAsProperties( const void* containerAddress, const std::function< void( const rtti::Property& ) >& visitFunc ) const override
 		{
-			const T* arr = static_cast< const T* >( containerAddress );
-
-			for ( size_t i = 0u; i < Count; ++i )
+			for ( size_t i = 0u; i < GetElementsAmount( containerAddress ); ++i )
 			{
-				visitFunc( arr + i );
+				std::string name = "[";
+				name += std::to_string( i );
+				name += "]";
+				visitFunc( *Type::CreateProperty( name.c_str(), i * GetInternalType().GetSize(), GetInternalType() ) );
 			}
 		}
 
@@ -1247,17 +1249,8 @@ namespace rtti
 			m_name += "[";
 			m_name += std::to_string( Count );
 			m_name += "]";
-
-			for ( size_t i = 0u; i < Count; ++i )
-			{
-				std::string name = "[";
-				name += std::to_string( i );
-				name += "]";
-				m_properties.emplace_back( Type::CreateProperty< T >( name.c_str(), i * sizeof( T ) ) );
-			}
 		}
 
-		std::vector< std::unique_ptr< ::rtti::Property > > m_properties;
 		std::string m_name;
 	};
 }
