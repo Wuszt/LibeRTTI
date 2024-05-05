@@ -1094,6 +1094,10 @@ namespace rtti
 	{
 	public:
 		virtual void EmplaceElement( void* containerAddress, void* elementAddress ) const = 0;
+		virtual void AddDefaultElement( void* containerAddress ) const = 0;
+		virtual void Clear( void* containerAddress ) const = 0;
+		virtual void RemoveElementAtIndex( void* containerAddress, Uint32 index ) const = 0;
+
 	protected:
 		using ContainerType::ContainerType;
 	};
@@ -1286,6 +1290,22 @@ namespace rtti
 		{
 			static_cast< std::vector< T >* >( containerAddress )->emplace_back( std::move( *static_cast< T* >( elementAddress ) ) );
 		}
+
+		virtual void AddDefaultElement( void* containerAddress ) const override
+		{
+			static_cast< std::vector< T >* >( containerAddress )->emplace_back();
+		}
+
+		virtual void Clear( void* containerAddress ) const override
+		{
+			static_cast< std::vector< T >* >( containerAddress )->clear();
+		}
+
+		virtual void RemoveElementAtIndex( void* containerAddress, Uint32 index ) const override
+		{
+			std::vector< T >* vector = static_cast< std::vector< T >* >( containerAddress );
+			vector->erase( vector->begin() + index );
+		}
 	};
 }
 #endif
@@ -1319,6 +1339,29 @@ namespace rtti
 		virtual void EmplaceElement( void* containerAddress, void* elementAddress ) const override
 		{
 			static_cast< std::unordered_set< T >* >( containerAddress )->emplace( std::move( *static_cast< T* >( elementAddress ) ) );
+		}
+
+		virtual void AddDefaultElement( void* containerAddress ) const override
+		{
+			static_cast< std::unordered_set< T >* >( containerAddress )->emplace();
+		}
+
+		virtual void Clear( void* containerAddress ) const override
+		{
+			static_cast< std::unordered_set< T >* >( containerAddress )->clear();
+		}
+
+		virtual void RemoveElementAtIndex( void* containerAddress, Uint32 index ) const override
+		{
+			std::unordered_set< T >* set = static_cast< std::unordered_set< T >* >( containerAddress );
+			Uint32 i = 0u;
+			for ( auto it = set->begin(); it != set->end(); ++it )
+			{
+				if ( i++ == index )
+				{
+					set->erase( it );
+				}
+			}
 		}
 	};
 }
@@ -1355,6 +1398,29 @@ namespace rtti
 		{
 			const std::pair< TKey, TValue >&& pair = std::move( *static_cast< std::pair< TKey, TValue >* >( elementAddress ) );
 			static_cast< std::unordered_map< TKey, TValue >* >( containerAddress )->emplace( pair.first, pair.second );
+		}
+
+		virtual void AddDefaultElement( void* containerAddress ) const override
+		{
+			static_cast< std::unordered_map< TKey, TValue >* >( containerAddress )->emplace( TKey(), TValue() );
+		}
+
+		virtual void Clear( void* containerAddress ) const override
+		{
+			static_cast< std::unordered_map< TKey, TValue >* >( containerAddress )->clear();
+		}
+
+		virtual void RemoveElementAtIndex( void* containerAddress, Uint32 index ) const override
+		{
+			std::unordered_map< TKey, TValue >* map = static_cast< std::unordered_map< TKey, TValue >* >( containerAddress );
+			Uint32 i = 0u;
+			for ( auto it = map->begin(); it != map->end(); ++it )
+			{
+				if ( i++ == index )
+				{
+					map->erase( it );
+				}
+			}
 		}
 
 	private:
