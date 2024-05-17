@@ -1776,6 +1776,21 @@ namespace rtti
 	template< class T >
 	struct method_signature;
 
+	namespace internal
+	{
+		template< class T >
+		static std::enable_if_t< std::is_same_v< void, T >, const rtti::Type* > GetTypeInstanceOrNull()
+		{
+			return nullptr;
+		}
+
+		template< class T >
+		static std::enable_if_t< !std::is_same_v< void, T>, const rtti::Type* > GetTypeInstanceOrNull()
+		{
+			return &rtti::GetTypeInstanceOf< T >();
+		}
+	}
+
 	template< class R, class TObj >
 	struct method_signature< R ( TObj::* )() >
 	{
@@ -1783,32 +1798,25 @@ namespace rtti
 		static void VisitArgumentTypes( const TFunc& func )
 		{}
 
-		template< class T >
-		static std::enable_if_t< std::is_same_v< void, T >, const rtti::Type* > GetReturnType_Internal()
-		{
-			return nullptr;
-		}
-
-		template< class T >
-		static std::enable_if_t< !std::is_same_v< void, T>, const rtti::Type* > GetReturnType_Internal()
-		{
-			return &rtti::GetTypeInstanceOf< T >();
-		}
-
 		static const rtti::Type* GetReturnType()
 		{
-			return GetReturnType_Internal< R >();
+			return internal::GetTypeInstanceOrNull< R >();
 		}
 	};
 
 	template< class R, class TObj, class TArg, class... TArgs >
-	struct method_signature< R ( TObj::* )( TArg, TArgs... )> : public method_signature< R( TObj::* )( TArgs... ) >
+	struct method_signature< R ( TObj::* )( TArg, TArgs... )>
 	{
 		template< class TFunc >
 		static void VisitArgumentTypes( const TFunc& func )
 		{
 			func( rtti::GetTypeInstanceOf< TArg >() );
 			method_signature< R( TObj::* )( TArgs... ) >::VisitArgumentTypes( func );
+		}
+
+		static const rtti::Type* GetReturnType()
+		{
+			return internal::GetTypeInstanceOrNull< R >();
 		}
 	};
 }
