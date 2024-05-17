@@ -1096,7 +1096,7 @@ namespace rtti
 		virtual void EmplaceElement( void* containerAddress, void* elementAddress ) const = 0;
 		virtual void AddDefaultElement( void* containerAddress ) const = 0;
 		virtual void Clear( void* containerAddress ) const = 0;
-		virtual void RemoveElementAtIndex( void* containerAddress, Uint32 index ) const = 0;
+		virtual void RemoveElementAtIndex( void* containerAddress, uint32_t index ) const = 0;
 
 	protected:
 		using ContainerType::ContainerType;
@@ -1134,7 +1134,7 @@ namespace rtti
 			}
 
 		private:
-			static std::array<const Type*, 1> GetInternalTypesStatic()
+			static std::array< const Type*, 1 > GetInternalTypesStatic()
 			{
 				return { &GetInternalTypeStatic() };
 			}
@@ -1301,7 +1301,7 @@ namespace rtti
 			static_cast< std::vector< T >* >( containerAddress )->clear();
 		}
 
-		virtual void RemoveElementAtIndex( void* containerAddress, Uint32 index ) const override
+		virtual void RemoveElementAtIndex( void* containerAddress, uint32_t index ) const override
 		{
 			std::vector< T >* vector = static_cast< std::vector< T >* >( containerAddress );
 			vector->erase( vector->begin() + index );
@@ -1351,10 +1351,10 @@ namespace rtti
 			static_cast< std::unordered_set< T >* >( containerAddress )->clear();
 		}
 
-		virtual void RemoveElementAtIndex( void* containerAddress, Uint32 index ) const override
+		virtual void RemoveElementAtIndex( void* containerAddress, uint32_t index ) const override
 		{
 			std::unordered_set< T >* set = static_cast< std::unordered_set< T >* >( containerAddress );
-			Uint32 i = 0u;
+			uint32_t i = 0u;
 			for ( auto it = set->begin(); it != set->end(); ++it )
 			{
 				if ( i++ == index )
@@ -1410,10 +1410,10 @@ namespace rtti
 			static_cast< std::unordered_map< TKey, TValue >* >( containerAddress )->clear();
 		}
 
-		virtual void RemoveElementAtIndex( void* containerAddress, Uint32 index ) const override
+		virtual void RemoveElementAtIndex( void* containerAddress, uint32_t index ) const override
 		{
 			std::unordered_map< TKey, TValue >* map = static_cast< std::unordered_map< TKey, TValue >* >( containerAddress );
-			Uint32 i = 0u;
+			uint32_t i = 0u;
 			for ( auto it = map->begin(); it != map->end(); ++it )
 			{
 				if ( i++ == index )
@@ -1768,4 +1768,48 @@ namespace rtti
 	};
 }
 #endif
+#pragma endregion
+
+#pragma region Methods
+namespace rtti
+{
+	template< class T >
+	struct method_signature;
+
+	template< class R, class TObj >
+	struct method_signature< R ( TObj::* )() >
+	{
+		template< class TFunc >
+		static void VisitArgumentTypes( const TFunc& func )
+		{}
+
+		template< class T >
+		static std::enable_if_t< std::is_same_v< void, T >, const rtti::Type* > GetReturnType_Internal()
+		{
+			return nullptr;
+		}
+
+		template< class T >
+		static std::enable_if_t< !std::is_same_v< void, T>, const rtti::Type* > GetReturnType_Internal()
+		{
+			return &rtti::GetTypeInstanceOf< T >();
+		}
+
+		static const rtti::Type* GetReturnType()
+		{
+			return GetReturnType_Internal< R >();
+		}
+	};
+
+	template< class R, class TObj, class TArg, class... TArgs >
+	struct method_signature< R ( TObj::* )( TArg, TArgs... )> : public method_signature< R( TObj::* )( TArgs... ) >
+	{
+		template< class TFunc >
+		static void VisitArgumentTypes( const TFunc& func )
+		{
+			func( rtti::GetTypeInstanceOf< TArg >() );
+			method_signature< R( TObj::* )( TArgs... ) >::VisitArgumentTypes( func );
+		}
+	};
+}
 #pragma endregion

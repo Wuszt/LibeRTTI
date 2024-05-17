@@ -129,17 +129,10 @@ TEST( TestCaseName, InheritsFrom )
 
 TEST( TestCaseName, GetParent )
 {
-	A a;
-	AA aa;
-	AAA aaa;
-
-	BB bb;
-	BBB bbb;
-
 	EXPECT_TRUE( A::GetTypeStatic().GetParent() == nullptr );
 	EXPECT_TRUE( AA::GetTypeStatic().GetParent() == &A::GetTypeStatic() );
 	EXPECT_TRUE( AAA::GetTypeStatic().GetParent() == &AA::GetTypeStatic() );
-	EXPECT_FALSE( A::GetTypeStatic().GetParent(), &B::GetTypeStatic() );
+	EXPECT_FALSE( A::GetTypeStatic().GetParent() == &B::GetTypeStatic() );
 
 	EXPECT_TRUE( B::GetTypeStatic().GetParent() == nullptr );
 	EXPECT_TRUE( BB::GetTypeStatic().GetParent() == &B::GetTypeStatic() );
@@ -855,4 +848,25 @@ TEST( TestCaseName, UniquePtrs )
 	const auto& type = ::rtti::GetTypeInstanceOf< std::unique_ptr< std::unique_ptr< Float > > >();
 	EXPECT_EQ( type.GetInternalType(), ::rtti::GetTypeInstanceOf< std::unique_ptr< Float > >() );
 	EXPECT_EQ( type.GetInternalType().GetInternalType(), ::rtti::GetTypeInstanceOf < Float >() );
+}
+
+namespace
+{
+	struct CFoo
+	{
+		void FooFunc( Int32 a, Float b, AAA aaa, std::vector< Bool > vec ) {}
+		Int32 FooFunc2() {}
+	};
+}
+
+TEST( TestCaseName, MethodSignature )
+{
+	std::vector< const rtti::Type* > types;
+	rtti::method_signature< decltype( &CFoo::FooFunc ) >::VisitArgumentTypes( [ & ](const rtti::Type& type) { types.emplace_back( &type ); } );
+	EXPECT_EQ( types[ 0 ], &rtti::GetTypeInstanceOf< Int32 >() );
+	EXPECT_EQ( types[ 1 ], &rtti::GetTypeInstanceOf< Float >() );
+	EXPECT_EQ( types[ 2 ], &rtti::GetTypeInstanceOf< AAA >() );
+	EXPECT_EQ( types[ 3 ], &rtti::GetTypeInstanceOf< std::vector< Bool > >() );
+	EXPECT_EQ( rtti::method_signature< decltype( &CFoo::FooFunc ) >::GetReturnType(), nullptr );
+	EXPECT_EQ( rtti::method_signature< decltype( &CFoo::FooFunc2 ) >::GetReturnType(), &rtti::GetTypeInstanceOf< Int32 >() );
 }
