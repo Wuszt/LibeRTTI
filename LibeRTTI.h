@@ -372,19 +372,18 @@ namespace rtti
 	{
 		friend class Type;
 	public:
-		virtual ~Property() = default;
 
 		const char* GetName() const 
 		{ 
 			return m_name;
 		}
 
-		virtual size_t GetOffset() const
+		size_t GetOffset() const
 		{
 			return m_offset;
 		}
 
-		virtual ID GetID() const
+		ID GetID() const
 		{
 			return m_id;
 		}
@@ -422,7 +421,7 @@ namespace rtti
 			return m_type;
 		}
 
-	protected:
+	private:
 		Property( const char* name, size_t offset, const Type& type )
 			: m_name( name )
 			, m_id( internal::CalcHash( name ) )
@@ -430,7 +429,6 @@ namespace rtti
 			, m_type( type )
 		{}
 
-	private:
 		const char* m_name = nullptr;
 		ID m_id = 0u;
 		size_t m_offset = 0u;
@@ -579,13 +577,13 @@ namespace rtti
 		static size_t GetPropertiesAmountStatic() { return 0u; }
 		static const ::rtti::Property* GetPropertyStatic( size_t index ) { return nullptr; }
 
-		static std::unique_ptr< ::rtti::Property > CreateProperty( const char* name, size_t offset, const Type& type )
+		static ::rtti::Property CreateProperty( const char* name, size_t offset, const Type& type )
 		{
-			return std::unique_ptr< ::rtti::Property >( new ::rtti::Property( name, offset, type ) );
+			return ::rtti::Property( name, offset, type );
 		}
 
 		template< class T >
-		static std::unique_ptr< ::rtti::Property > CreateProperty( const char* name, size_t offset )
+		static ::rtti::Property CreateProperty( const char* name, size_t offset )
 		{
 			return CreateProperty( name, offset, GetTypeInstanceOf< std::remove_const_t< T > >() );
 		}
@@ -692,7 +690,7 @@ public: \
 			} \
 			else \
 			{ \
-				return m_properties[ index - ParentClassType::GetPropertiesAmountStatic() ].get(); \
+				return &m_properties[ index - ParentClassType::GetPropertiesAmountStatic() ]; \
 			} \
 		} \
 	protected: \
@@ -706,7 +704,7 @@ public: \
 		static const ::rtti::Property* GetPropertyStatic( size_t index ) { return GetInstance().GetProperty( index ); } \
 		virtual void OnRegistered() override; \
 	private: \
-		std::vector< std::unique_ptr< ::rtti::Property > > m_properties; \
+		std::vector< ::rtti::Property > m_properties; \
 	}; \
 	static const Type& GetTypeStatic() \
 	{ \
@@ -1015,7 +1013,12 @@ namespace rtti
 			virtual size_t GetPropertiesAmount() const override { return m_properties.size(); }
 			virtual const ::rtti::Property* GetProperty( size_t index ) const override
 			{
-				return m_properties[ index ].get();
+				if ( index < m_properties.size() )
+				{
+					return &m_properties[ index ];
+				}
+
+				return nullptr;
 			}
 
 			static constexpr const char* GetBaseName() { return "Pair"; }
@@ -1063,7 +1066,7 @@ namespace rtti
 				return { &GetFirstInternalTypeStatic(), &GetSecondInternalTypeStatic() };
 			}
 
-			std::vector< std::unique_ptr< ::rtti::Property > > m_properties;
+			std::vector< ::rtti::Property > m_properties;
 		};
 	}
 
@@ -1128,7 +1131,7 @@ namespace rtti
 					std::string name = "[";
 					name += std::to_string( i );
 					name += "]";
-					visitFunc( *Type::CreateProperty( name.c_str(), reinterpret_cast< const uint8_t* >( &element ) - reinterpret_cast< const uint8_t* >( containerAddress ), GetInternalType() ) );
+					visitFunc( Type::CreateProperty( name.c_str(), reinterpret_cast< const uint8_t* >( &element ) - reinterpret_cast< const uint8_t* >( containerAddress ), GetInternalType() ) );
 					++i;
 				}
 			}
@@ -1240,7 +1243,7 @@ namespace rtti
 				std::string name = "[";
 				name += std::to_string( i );
 				name += "]";
-				visitFunc( *Type::CreateProperty( name.c_str(), i * GetInternalType().GetSize(), GetInternalType() ) );
+				visitFunc( Type::CreateProperty( name.c_str(), i * GetInternalType().GetSize(), GetInternalType() ) );
 			}
 		}
 
@@ -1516,7 +1519,7 @@ namespace rtti
 			return ::rtti::RTTI::GetMutable().GetOrRegisterType< RuntimeType >( std::move( name ) );
 		}
 
-		const std::unique_ptr< ::rtti::Property >& AddProperty( const char* name, const Type& type )
+		const ::rtti::Property& AddProperty( const char* name, const Type& type )
 		{
 			size_t currentOffset = ParentType::GetSize();
 			
@@ -1534,7 +1537,7 @@ namespace rtti
 		}
 
 		template< class T >
-		const std::unique_ptr< ::rtti::Property >& AddProperty( const char* name )
+		const ::rtti::Property& AddProperty( const char* name )
 		{
 			return AddProperty( name, GetTypeInstanceOf< T >() );
 		}
@@ -1554,8 +1557,8 @@ namespace rtti
 			ParentType::ConstructInPlace( dest );
 			for ( const auto& property : m_properties )
 			{
-				const auto& type = property->GetType();
-				type.ConstructInPlace( static_cast< uint8_t* >( dest ) + property->GetOffset() );
+				const auto& type = property.GetType();
+				type.ConstructInPlace( static_cast< uint8_t* >( dest ) + property.GetOffset() );
 			}
 		}
 
@@ -1565,8 +1568,8 @@ namespace rtti
 			ParentType::MoveInPlace( dest, src );
 			for ( const auto& property : m_properties )
 			{
-				const auto& type = property->GetType();
-				type.MoveInPlace( static_cast< uint8_t* >( dest ) + property->GetOffset(), static_cast< uint8_t* >( src ) + property->GetOffset() );
+				const auto& type = property.GetType();
+				type.MoveInPlace( static_cast< uint8_t* >( dest ) + property.GetOffset(), static_cast< uint8_t* >( src ) + property.GetOffset() );
 			}
 		}
 #endif
@@ -1576,8 +1579,8 @@ namespace rtti
 			ParentType::Destroy( address );
 			for ( const auto& property : m_properties )
 			{
-				const auto& type = property->GetType();
-				type.Destroy( static_cast< uint8_t* >( address ) + property->GetOffset() );
+				const auto& type = property.GetType();
+				type.Destroy( static_cast< uint8_t* >( address ) + property.GetOffset() );
 			}
 		}
 
@@ -1598,10 +1601,13 @@ namespace rtti
 			{
 				return ParentType::GetPropertyStatic( index );
 			}
-			else
+			
+			if ( index - ParentType::GetPropertiesAmountStatic() < m_properties.size() )
 			{
-				return m_properties[ index - ParentType::GetPropertiesAmountStatic() ].get();
+				return &m_properties[ index - ParentType::GetPropertiesAmountStatic() ];
 			}
+
+			return nullptr;
 		}
 
 	private:
@@ -1611,7 +1617,7 @@ namespace rtti
 		{}
 
 		std::string m_name;
-		std::vector< std::unique_ptr< ::rtti::Property > > m_properties;
+		std::vector< ::rtti::Property > m_properties;
 		size_t m_size = ParentType::GetSize();
 		size_t m_alignment = ParentType::GetAlignment();
 	};
