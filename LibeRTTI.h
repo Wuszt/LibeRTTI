@@ -60,6 +60,7 @@
 #include <string>
 #include <array>
 #include <functional>
+#include <stdint.h>
 
 #if RTTI_CFG_CREATE_STD_PAIR_TYPE || RTTI_CFG_CREATE_STD_MAP_TYPE
 #include <utility>
@@ -371,6 +372,7 @@ namespace rtti
 	class Property
 	{
 		friend class Type;
+
 	public:
 
 		const char* GetName() const 
@@ -438,6 +440,103 @@ namespace rtti
 
 #define RTTI_REGISTER_PROPERTY( PropertyName ) m_properties.emplace_back( CreateProperty< decltype( CurrentlyImplementedType::##PropertyName ) >( #PropertyName, offsetof( CurrentlyImplementedType, PropertyName ) ) );
 
+#pragma endregion
+
+#pragma region Methods
+namespace rtti
+{
+	template< class T >
+	struct method_signature;
+
+	namespace internal
+	{
+		template< class T >
+		static std::enable_if_t< std::is_same_v< void, T >, const rtti::Type* > GetTypeInstanceOrNull()
+		{
+			return nullptr;
+		}
+
+		template< class T >
+		static std::enable_if_t< !std::is_same_v< void, T>, const rtti::Type* > GetTypeInstanceOrNull()
+		{
+			return &rtti::GetTypeInstanceOf< T >();
+		}
+	}
+
+	template< class R, class TObj >
+	struct method_signature< R( TObj::* )( ) >
+	{
+		template< class TFunc >
+		static void VisitArgumentTypes( const TFunc& func )
+		{}
+
+		static const rtti::Type* GetReturnType()
+		{
+			return internal::GetTypeInstanceOrNull< R >();
+		}
+	};
+
+	template< class R, class TObj, class TArg, class... TArgs >
+	struct method_signature< R( TObj::* )( TArg, TArgs... )>
+	{
+		template< class TFunc >
+		static void VisitArgumentTypes( const TFunc& func )
+		{
+			func( rtti::GetTypeInstanceOf< TArg >() );
+			method_signature< R( TObj::* )( TArgs... ) >::VisitArgumentTypes( func );
+		}
+
+		static const rtti::Type* GetReturnType()
+		{
+			return internal::GetTypeInstanceOrNull< R >();
+		}
+	};
+
+	class Function
+	{
+		friend class Type;
+
+	public:
+		const char* GetName() const
+		{
+			return m_name;
+		}
+
+		size_t GetParametersAmount() const
+		{
+			return m_parameterTypes.size();
+		}
+
+		const Type* GetParameterType( size_t index ) const
+		{
+			if ( index < m_parameterTypes.size() )
+			{
+				return m_parameterTypes[ index ];
+			}
+
+			return nullptr;
+		}
+
+		const Type* GetReturnType() const
+		{
+			return m_returnType;
+		}
+
+	private:
+		Function( const char* name, const Type* returnType, std::vector< const Type* > parameterTypes )
+			: m_name( name )
+			, m_parameterTypes( std::move( parameterTypes ) )
+			, m_returnType( returnType )
+		{}
+
+		const char* m_name = nullptr;
+		std::vector< const Type* > m_parameterTypes;
+		const Type* m_returnType = nullptr;
+	};
+
+
+#define RTTI_REGISTER_METHOD( MethodName ) m_methods.emplace_back( CreateFunction< decltype( &##CurrentlyImplementedType::##MethodName ) >( #MethodName ) );
+}
 #pragma endregion
 
 #pragma region TypeClass
@@ -544,6 +643,9 @@ namespace rtti
 		virtual size_t GetPropertiesAmount() const { return 0u; }
 		virtual const Property* GetProperty( size_t index ) const { return nullptr; }
 
+		virtual size_t GetMethodsAmount() const { return 0u; }
+		virtual const Function* GetMethod( size_t index ) const { return nullptr; }
+
 		const Property* FindProperty( size_t wantedId ) const
 		{
 			for ( size_t i = 0u; i < GetPropertiesAmount(); ++i )
@@ -563,6 +665,20 @@ namespace rtti
 			return FindProperty( internal::CalcHash( name ) );
 		}
 
+		const Function* FindMethod( const char* name ) const
+		{
+			for ( size_t i = 0u; i < GetMethodsAmount(); ++i )
+			{
+				const Function* method = GetMethod( i );
+				if ( strcmp( name, method->GetName() ) == 0 )
+				{
+					return method;
+				}
+			}
+
+			return nullptr;
+		}
+
 	protected:
 		Type( const char* name )
 			: Type( internal::CalcHash( name ) )
@@ -577,6 +693,9 @@ namespace rtti
 		static size_t GetPropertiesAmountStatic() { return 0u; }
 		static const ::rtti::Property* GetPropertyStatic( size_t index ) { return nullptr; }
 
+		static size_t GetMethodsAmountStatic() { return 0u; }
+		static const ::rtti::Function* GetMethodStatic( size_t index ) { return nullptr; }
+
 		static ::rtti::Property CreateProperty( const char* name, size_t offset, const Type& type )
 		{
 			return ::rtti::Property( name, offset, type );
@@ -586,6 +705,18 @@ namespace rtti
 		static ::rtti::Property CreateProperty( const char* name, size_t offset )
 		{
 			return CreateProperty( name, offset, GetTypeInstanceOf< std::remove_const_t< T > >() );
+		}
+
+		template< class TFunc >
+		static ::rtti::Function CreateFunction( const char* name )
+		{
+			std::vector< const ::rtti::Type* > parameterTypes;
+			method_signature< TFunc >::VisitArgumentTypes( [ &parameterTypes ]( const ::rtti::Type& type )
+				{
+					parameterTypes.emplace_back( &type );
+				} );
+
+			return ::rtti::Function( name, method_signature< TFunc >::GetReturnType(), std::move( parameterTypes ) );
 		}
 
 	private:
@@ -693,6 +824,18 @@ public: \
 				return &m_properties[ index - ParentClassType::GetPropertiesAmountStatic() ]; \
 			} \
 		} \
+		virtual size_t GetMethodsAmount() const override { return ParentClassType::GetMethodsAmountStatic() + m_methods.size(); } \
+		virtual const ::rtti::Function* GetMethod( size_t index ) const override \
+		{ \
+			if( index < ParentClassType::GetMethodsAmountStatic() ) \
+			{ \
+				return ParentClassType::GetMethodStatic( index ); \
+			} \
+			else \
+			{ \
+				return &m_methods[ index - ParentClassType::GetMethodsAmountStatic() ]; \
+			} \
+		} \
 	protected: \
 		RTTI_INTERNAL_VIRTUAL_##Virtual ClassName##* Construct_Internal() const \
 		{ \
@@ -705,6 +848,7 @@ public: \
 		virtual void OnRegistered() override; \
 	private: \
 		std::vector< ::rtti::Property > m_properties; \
+		std::vector< ::rtti::Function > m_methods; \
 	}; \
 	static const Type& GetTypeStatic() \
 	{ \
@@ -1774,56 +1918,4 @@ namespace rtti
 	};
 }
 #endif
-#pragma endregion
-
-#pragma region Methods
-namespace rtti
-{
-	template< class T >
-	struct method_signature;
-
-	namespace internal
-	{
-		template< class T >
-		static std::enable_if_t< std::is_same_v< void, T >, const rtti::Type* > GetTypeInstanceOrNull()
-		{
-			return nullptr;
-		}
-
-		template< class T >
-		static std::enable_if_t< !std::is_same_v< void, T>, const rtti::Type* > GetTypeInstanceOrNull()
-		{
-			return &rtti::GetTypeInstanceOf< T >();
-		}
-	}
-
-	template< class R, class TObj >
-	struct method_signature< R ( TObj::* )() >
-	{
-		template< class TFunc >
-		static void VisitArgumentTypes( const TFunc& func )
-		{}
-
-		static const rtti::Type* GetReturnType()
-		{
-			return internal::GetTypeInstanceOrNull< R >();
-		}
-	};
-
-	template< class R, class TObj, class TArg, class... TArgs >
-	struct method_signature< R ( TObj::* )( TArg, TArgs... )>
-	{
-		template< class TFunc >
-		static void VisitArgumentTypes( const TFunc& func )
-		{
-			func( rtti::GetTypeInstanceOf< TArg >() );
-			method_signature< R( TObj::* )( TArgs... ) >::VisitArgumentTypes( func );
-		}
-
-		static const rtti::Type* GetReturnType()
-		{
-			return internal::GetTypeInstanceOrNull< R >();
-		}
-	};
-}
 #pragma endregion

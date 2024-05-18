@@ -850,14 +850,21 @@ TEST( TestCaseName, UniquePtrs )
 	EXPECT_EQ( type.GetInternalType().GetInternalType(), ::rtti::GetTypeInstanceOf < Float >() );
 }
 
-namespace
+namespace rttiTest
 {
 	struct CFoo
 	{
+		RTTI_DECLARE_STRUCT( CFoo );
+
 		void FooFunc( Int32 a, Float b, AAA aaa, std::vector< Bool > vec ) {}
 		Int32 FooFunc2() {}
 	};
 }
+
+RTTI_IMPLEMENT_TYPE( rttiTest::CFoo,
+	RTTI_REGISTER_METHOD( FooFunc );
+	RTTI_REGISTER_METHOD( FooFunc2 );
+);
 
 TEST( TestCaseName, MethodSignature )
 {
@@ -869,4 +876,30 @@ TEST( TestCaseName, MethodSignature )
 	EXPECT_EQ( types[ 3 ], &rtti::GetTypeInstanceOf< std::vector< Bool > >() );
 	EXPECT_EQ( rtti::method_signature< decltype( &CFoo::FooFunc ) >::GetReturnType(), nullptr );
 	EXPECT_EQ( rtti::method_signature< decltype( &CFoo::FooFunc2 ) >::GetReturnType(), &rtti::GetTypeInstanceOf< Int32 >() );
+}
+
+TEST( TestCaseName, Methods )
+{
+	const auto& type = rttiTest::CFoo::GetTypeStatic();
+	EXPECT_EQ( type.GetMethodsAmount(), 2 );
+
+	const auto* method = type.GetMethod( 0 );
+	EXPECT_EQ( method->GetParametersAmount(), 4 );
+
+	EXPECT_EQ( method->GetParametersAmount(), 4 );
+	EXPECT_EQ( method->GetParameterType( 0 ), &rtti::GetTypeInstanceOf< Int32 >() );
+	EXPECT_EQ( method->GetParameterType( 1 ), &rtti::GetTypeInstanceOf< Float >() );
+	EXPECT_EQ( method->GetParameterType( 2 ), &rtti::GetTypeInstanceOf< AAA >() );
+	EXPECT_EQ( method->GetParameterType( 3 ), &rtti::GetTypeInstanceOf< std::vector< Bool > >() );
+	EXPECT_EQ( method->GetReturnType(), nullptr );
+
+	EXPECT_EQ( type.GetMethod( 1 )->GetReturnType(), &rtti::GetTypeInstanceOf< Int32 >() );
+	EXPECT_EQ( type.GetMethod( 1 )->GetParametersAmount(), 0 );
+}
+
+TEST( TestCaseName, FindingMethods )
+{
+	const auto& type = rttiTest::CFoo::GetTypeStatic();
+	EXPECT_EQ( type.GetMethod( 0 ), type.FindMethod( "FooFunc" ) );
+	EXPECT_EQ( type.GetMethod( 1 ), type.FindMethod( "FooFunc2" ) );
 }
