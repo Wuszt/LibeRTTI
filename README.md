@@ -81,7 +81,6 @@ void Func( void* rawInstance, const rtti::Type& type )
     myType.FindMethod( "Foo" )->Call( /*instance*/ rawInstance, /*args*/ &arg, /*outcome*/ &fooResult );
   }
 }
-instance.GetTypeStatic
 ```
 
 ## Usage
