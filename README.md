@@ -1,11 +1,11 @@
 # LibeRTTI :statue_of_liberty:
-LibeRTTI is header only and dependencies free library which provides type data for your (and selected built-in) c++ types. The minimal requirement is C++14.
+LibeRTTI is a header only and dependency-free library which provides type data for your (and selected built-in) c++ types. The minimal requirement is C++14.
 
 ## Features
 
 | Feature                          | Description   |
 | :---                             | :---          |
-| **Hierarchy based** | Every registered type gets it's unique nested type class, e.g if you have a `class A` then it's type class will be `A::Type`. These type classes creates a hierarchy based on their original classes hierarchy. So for instance, if `class A : public B`, then `class A::Type : class B::Type`. Also, all type classes are virtual, even if their original classes are not. It allows you to take advantage of polymorphic features like having a function parameter of type `const A::Type&` and passing the children types of A as arguments. `rtti:Type` is the root class for all types classes. |
+| **Hierarchy based** | Every registered type gets its unique nested type class, e.g if you have a `class A` then it's type class will be `A::Type`. These type classes create a hierarchy based on their original classes hierarchy. So for instance, if `class A : public B`, then `class A::Type : class B::Type`. Also, all type classes are virtual, even if their original classes are not. It allows you to take advantage of polymorphic features like having a function parameter of type `const A::Type&` and passing the children types of A as arguments. `rtti:Type` is the root class for all types classes. |
 | **Super keyword** | A well known feature from other languages. The `Super` keyword refers to the parent class of your class |
 | **Instantiating/Destroying/Copying without knowing true type** | Type classes are able to instantiate, destroy or copy raw memory which contains the types they represent. |
 | **Move without knowing true type (Optional)** | Same as above but with the move operation. It forces all registered types to be movable. It might be disabled by defining `RTTI_REQUIRE_MOVE_CTOR 0` before including the **LibeRTTI** header. |
