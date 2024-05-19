@@ -252,6 +252,42 @@ namespace rtti
 		public:
 			static constexpr bool value = sizeof( Test<T>( 0 ) ) == sizeof( yes );
 		};
+
+		template< class T >
+		static const rtti::Type* GetTypeInstanceOrNull()
+		{
+			return &rtti::GetTypeInstanceOf< T >();
+		}
+
+		template<>
+		static const rtti::Type* GetTypeInstanceOrNull< void >()
+		{
+			return nullptr;
+		}
+
+		template<int Index, class T, class... Ts>
+		struct get_type_from_pack
+		{
+			using type = typename get_type_from_pack< Index - 1, Ts... >::type;
+		};
+
+		template<class T, class... Ts>
+		struct get_type_from_pack< 0, T, Ts... >
+		{
+			using type = T;
+		};
+
+		template< class T >
+		struct remove_const_from_func
+		{
+			using type = T;
+		};
+
+		template< class R, class TObj, class... Args >
+		struct remove_const_from_func< R( TObj::* )( Args... ) const >
+		{
+			using type = R( TObj::* )( Args... );
+		};
 	}
 }
 #pragma endregion
@@ -445,50 +481,61 @@ namespace rtti
 #pragma region Methods
 namespace rtti
 {
+	namespace internal
+	{
+		template< class R, class TObj, class... TArgs >
+		struct method_signature_common
+		{
+			static constexpr int ArgsAmount = sizeof...( TArgs );
+
+			template< size_t Index = 0u, class... Args >
+			static std::enable_if_t< Index != ArgsAmount, void > Call( R( TObj::* func )( TArgs... ), void* obj, void* args, void* returnVal, Args... pack )
+			{
+				using T = typename get_type_from_pack< Index, TArgs... >::type;
+				uint8_t* argAddress = reinterpret_cast< uint8_t* >( args );
+				const size_t offset = ( alignof( T ) - ( reinterpret_cast< size_t >( argAddress ) & ( alignof( T ) - 1 ) ) ) & ( alignof( T ) - 1 );
+				argAddress = argAddress + offset;
+				Call< Index + 1 >( func, obj, reinterpret_cast< void* >( argAddress + sizeof( T ) ), returnVal, pack..., *reinterpret_cast< T* >( argAddress ) );
+			}
+
+			template< size_t Index = 0u, class... Args >
+			static std::enable_if_t< Index == ArgsAmount && !std::is_same_v<void, R>, void > Call( R( TObj::* func )( TArgs... ), void* obj, void* args, void* returnVal, Args... pack )
+			{
+				*( R* )returnVal = ( reinterpret_cast< TObj* >( obj )->*func )( pack... );
+			}
+
+			template< size_t Index = 0u, class... Args >
+			static std::enable_if_t< Index == ArgsAmount && std::is_same_v<void, R>, void > Call( R( TObj::* func )( TArgs... ), void* obj, void* args, void* returnVal, Args... pack )
+			{
+				( reinterpret_cast< TObj* >( obj )->*func )( pack... );
+			}
+
+			static const rtti::Type* GetReturnType()
+			{
+				return internal::GetTypeInstanceOrNull< R >();
+			}
+		};
+	}
+
 	template< class T >
 	struct method_signature;
 
-	namespace internal
-	{
-		template< class T >
-		static std::enable_if_t< std::is_same_v< void, T >, const rtti::Type* > GetTypeInstanceOrNull()
-		{
-			return nullptr;
-		}
-
-		template< class T >
-		static std::enable_if_t< !std::is_same_v< void, T>, const rtti::Type* > GetTypeInstanceOrNull()
-		{
-			return &rtti::GetTypeInstanceOf< T >();
-		}
-	}
-
 	template< class R, class TObj >
-	struct method_signature< R( TObj::* )( ) >
+	struct method_signature< R( TObj::* )() > : public internal::method_signature_common< R, TObj >
 	{
 		template< class TFunc >
 		static void VisitArgumentTypes( const TFunc& func )
 		{}
-
-		static const rtti::Type* GetReturnType()
-		{
-			return internal::GetTypeInstanceOrNull< R >();
-		}
 	};
 
 	template< class R, class TObj, class TArg, class... TArgs >
-	struct method_signature< R( TObj::* )( TArg, TArgs... )>
+	struct method_signature< R( TObj::* )( TArg, TArgs... )> : public internal::method_signature_common< R, TObj, TArg, TArgs... >
 	{
 		template< class TFunc >
 		static void VisitArgumentTypes( const TFunc& func )
 		{
 			func( rtti::GetTypeInstanceOf< TArg >() );
 			method_signature< R( TObj::* )( TArgs... ) >::VisitArgumentTypes( func );
-		}
-
-		static const rtti::Type* GetReturnType()
-		{
-			return internal::GetTypeInstanceOrNull< R >();
 		}
 	};
 
@@ -522,20 +569,28 @@ namespace rtti
 			return m_returnType;
 		}
 
+		void Call( void* obj, void* args, void* ret ) const
+		{
+			m_func( obj, args, ret );
+		}
+
 	private:
-		Function( const char* name, const Type* returnType, std::vector< const Type* > parameterTypes )
+		using InternalFuncType = std::function< void( void*, void*, void* ) >;
+		Function( const char* name, const Type* returnType, std::vector< const Type* > parameterTypes, InternalFuncType func )
 			: m_name( name )
 			, m_parameterTypes( std::move( parameterTypes ) )
 			, m_returnType( returnType )
+			, m_func( std::move( func ) )
 		{}
 
 		const char* m_name = nullptr;
 		std::vector< const Type* > m_parameterTypes;
 		const Type* m_returnType = nullptr;
+		InternalFuncType m_func;
 	};
 
 
-#define RTTI_REGISTER_METHOD( MethodName ) m_methods.emplace_back( CreateFunction< decltype( &##CurrentlyImplementedType::##MethodName ) >( #MethodName ) );
+#define RTTI_REGISTER_METHOD( MethodName ) m_methods.emplace_back( CreateFunction( #MethodName , &##CurrentlyImplementedType::##MethodName ) );
 }
 #pragma endregion
 
@@ -708,15 +763,23 @@ namespace rtti
 		}
 
 		template< class TFunc >
-		static ::rtti::Function CreateFunction( const char* name )
+		static ::rtti::Function CreateFunction( const char* name, TFunc funcPtr )
 		{
+			using TNonConstFunc = internal::remove_const_from_func< TFunc >::type;
+			TNonConstFunc nonConstFuncPtr = reinterpret_cast< TNonConstFunc >( funcPtr );
+
 			std::vector< const ::rtti::Type* > parameterTypes;
-			method_signature< TFunc >::VisitArgumentTypes( [ &parameterTypes ]( const ::rtti::Type& type )
+			method_signature< TNonConstFunc >::VisitArgumentTypes( [ &parameterTypes ]( const ::rtti::Type& type )
 				{
 					parameterTypes.emplace_back( &type );
 				} );
 
-			return ::rtti::Function( name, method_signature< TFunc >::GetReturnType(), std::move( parameterTypes ) );
+			auto func = [ nonConstFuncPtr ]( void* obj, void* args, void* ret )
+				{
+					method_signature< TNonConstFunc >::Call( nonConstFuncPtr, obj, args, ret );
+				};
+
+			return ::rtti::Function( name, method_signature< TNonConstFunc >::GetReturnType(), std::move( parameterTypes ), std::move( func ) );
 		}
 
 	private:

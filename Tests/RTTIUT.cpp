@@ -857,13 +857,28 @@ namespace rttiTest
 		RTTI_DECLARE_STRUCT( CFoo );
 
 		void FooFunc( Int32 a, Float b, AAA aaa, std::vector< Bool > vec ) {}
-		Int32 FooFunc2() {}
+		Int32 FooFunc2() { return 123; }
+
+		Int32 FooSum( const Int32 a, Int32 b ){ return a + b; }
+		//void FooRef( Int32& ref ) { ref = 123; }
+		Int32 FooConstRef( const Int32& ref ) { return ref; }
+		void FooPtr( Int32* ptr ) { *ptr = 123; }
+		Int32 FooConstPtr( const Int32* ptr ) { return *ptr; }
+		Float FooGet() const { return m_floatVar; }
+		void FooSet( Float val ) { m_floatVar = val; }
+
+		Float m_floatVar = 3.14f;
 	};
 }
 
 RTTI_IMPLEMENT_TYPE( rttiTest::CFoo,
 	RTTI_REGISTER_METHOD( FooFunc );
 	RTTI_REGISTER_METHOD( FooFunc2 );
+	RTTI_REGISTER_METHOD( FooSum );
+	RTTI_REGISTER_METHOD( FooPtr );
+	RTTI_REGISTER_METHOD( FooConstPtr );
+	RTTI_REGISTER_METHOD( FooGet );
+	RTTI_REGISTER_METHOD( FooSet );
 );
 
 TEST( TestCaseName, MethodSignature )
@@ -878,10 +893,10 @@ TEST( TestCaseName, MethodSignature )
 	EXPECT_EQ( rtti::method_signature< decltype( &CFoo::FooFunc2 ) >::GetReturnType(), &rtti::GetTypeInstanceOf< Int32 >() );
 }
 
-TEST( TestCaseName, Methods )
+TEST( TestCaseName, TypeMethods )
 {
 	const auto& type = rttiTest::CFoo::GetTypeStatic();
-	EXPECT_EQ( type.GetMethodsAmount(), 2 );
+	EXPECT_EQ( type.GetMethodsAmount(), 7 );
 
 	const auto* method = type.GetMethod( 0 );
 	EXPECT_EQ( method->GetParametersAmount(), 4 );
@@ -902,4 +917,61 @@ TEST( TestCaseName, FindingMethods )
 	const auto& type = rttiTest::CFoo::GetTypeStatic();
 	EXPECT_EQ( type.GetMethod( 0 ), type.FindMethod( "FooFunc" ) );
 	EXPECT_EQ( type.GetMethod( 1 ), type.FindMethod( "FooFunc2" ) );
+}
+
+TEST( TestCaseName, CallingMethods )
+{
+	const auto& type = rttiTest::CFoo::GetTypeStatic();
+	CFoo obj;
+
+	{
+		const auto* method = type.FindMethod( "FooSum" );
+		struct
+		{
+			Int32 a = 50;
+			Int32 b = 6;
+		} params;
+
+		Int32 retVal = 0;
+
+		method->Call( &obj, &params, &retVal );
+		EXPECT_EQ( retVal, 56 );
+	}
+
+	{
+		const auto* method = type.FindMethod( "FooPtr" );
+		Int32 input = 0;
+		Int32* ptr = &input;
+
+		method->Call( &obj, &ptr, nullptr);
+		EXPECT_EQ( input, 123 );
+	}
+
+	{
+		const auto* method = type.FindMethod( "FooConstPtr" );
+		Int32 input = 6546456;
+		Int32* ptr = &input;
+
+		Int32 output = 0;
+
+		method->Call( &obj, &ptr, &output );
+		EXPECT_EQ( input, output );
+	}
+
+	{
+		const auto* method = type.FindMethod( "FooSet" );
+		Float input = 3.14f;
+
+		obj.m_floatVar = 0.0f;
+		method->Call( &obj, &input, nullptr );
+		EXPECT_EQ( obj.m_floatVar, 3.14f );
+	}
+
+	{
+		const auto* method = type.FindMethod( "FooGet" );
+		obj.m_floatVar = 1.23f;
+		Float result = 0.0f;
+		method->Call( &obj, nullptr, &result );
+		EXPECT_EQ( result, obj.m_floatVar );
+	}
 }
