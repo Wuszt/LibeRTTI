@@ -3,7 +3,7 @@
 </p>
 
 
-<h3 align="center"> > Liberate your C++ with reflection! < </h3>
+<h3 align="center"> Liberate your C++ with reflection! </h3>
 <br>
 <br>
 
