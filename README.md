@@ -2,7 +2,7 @@
   <img src="Logo.png">
 </p>
 
-# LibeRTTI :statue_of_liberty:
+# LibeRTTI - **Liberate your C++ with reflection!**:statue_of_liberty:
 LibeRTTI is a header only and dependency-free library which provides type data for your (and selected built-in) c++ types. The minimal requirement is C++14.
 
 ## Features
