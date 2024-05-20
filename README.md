@@ -7,10 +7,9 @@
 <br>
 <br>
 
-# LibeRTTI :statue_of_liberty:
 LibeRTTI is a header only and dependency-free library which provides type data for your (and selected built-in) c++ types. The minimal requirement is C++14.
 
-## Features
+# Features :statue_of_liberty:
 
 | Feature                          | Description   |
 | :---                             | :---          |
@@ -27,7 +26,7 @@ LibeRTTI is a header only and dependency-free library which provides type data f
 | **Runtime Types** | You can compose completely new type with selected properties in runtime. Such types can still inherit from other types and preserve hierarchy of classes.
 | **std:: <br /> shared_ptr <br /> unique_ptr <br /> vector <br />unordered_set <br />unordered_map <br />pair <br /> Types (Optional)** | All these types are registered out of the box and might be disabled using config defines: <br />`RTTI_CFG_CREATE_STD_SHAREDPTR_TYPE 0`, <br />`RTTI_CFG_CREATE_STD_UNIQUEPTR_TYPE 0`, <br /> `RTTI_CFG_CREATE_STD_VECTOR_TYPE 0`, <br /> `RTTI_CFG_CREATE_STD_SET_TYPE 0`,<br /> `RTTI_CFG_CREATE_STD_MAP_TYPE 0`,<br /> `RTTI_CFG_CREATE_STD_PAIR_TYPE 0` <br />  &#8205;  |
 
-## Demo
+# Demo :statue_of_liberty:
 ```cpp
 // .h
 struct BaseStruct
@@ -83,9 +82,9 @@ void Func( void* rawInstance, const rtti::Type& type )
 }
 ```
 
-## Usage
+# Usage :statue_of_liberty:
 Registering your type requires 2 steps.
-### 1. Declare type
+## 1. Declare type
 Put one of the following macros into your type's body.
 | Type                             | Macro   |
 | :---                             | :---          |
@@ -96,7 +95,7 @@ Put one of the following macros into your type's body.
 | Abstract class | <pre lang=cpp> RTTI_DECLARE_ABSTRACT_CLASS( <class_name>, <parent_name_with_namespace> (optional) ) </pre>
 |                            |        |
 | Struct |  <pre lang=cpp> RTTI_DECLARE_STRUCT( <struct_name>, <parent_name_with_namespace> (optional) ) </pre>
-### 2. Implement type
+## 2. Implement type
 Put the following macro in .cpp file.
 ```cpp
 RTTI_IMPLEMENT_TYPE( <class_name_with_namespace>, <properties_registration_macros>... (optional> )
