@@ -27,6 +27,7 @@ LibeRTTI is a header only and dependency-free library which provides type data f
 | **std:: <br /> shared_ptr <br /> unique_ptr <br /> vector <br />unordered_set <br />unordered_map <br />pair <br /> Types (Optional)** | All these types are registered out of the box and might be disabled using config defines: <br />`RTTI_CFG_CREATE_STD_SHAREDPTR_TYPE 0`, <br />`RTTI_CFG_CREATE_STD_UNIQUEPTR_TYPE 0`, <br /> `RTTI_CFG_CREATE_STD_VECTOR_TYPE 0`, <br /> `RTTI_CFG_CREATE_STD_SET_TYPE 0`,<br /> `RTTI_CFG_CREATE_STD_MAP_TYPE 0`,<br /> `RTTI_CFG_CREATE_STD_PAIR_TYPE 0` <br />  &#8205;  |
 
 # Demo :statue_of_liberty:
+More examples can be found in [**Tests**](https://github.com/Wuszt/LibeRTTI/tree/main/Tests) or [**Forge project**](https://github.com/Wuszt/Forge) source code.
 ```cpp
 // .h
 struct BaseStruct
@@ -107,6 +108,3 @@ RTTI_REGISTER_PROPERTY( <property_name> )
 For methods use:
 RTTI_REGISTER_METHOD( <method_name> )
 and put it in `RTTI_IMPLEMENT_TYPE` macro.
-
----
-Examples can be found in [**Tests**](https://github.com/Wuszt/LibeRTTI/tree/main/Tests) or [**Forge project**](https://github.com/Wuszt/Forge) source code.
