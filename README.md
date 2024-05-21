@@ -106,5 +106,7 @@ To register property of your type use:
 RTTI_REGISTER_PROPERTY( <property_name> )
 ```
 For methods use:
+```cpp
 RTTI_REGISTER_METHOD( <method_name> )
+```
 and put it in `RTTI_IMPLEMENT_TYPE` macro.
