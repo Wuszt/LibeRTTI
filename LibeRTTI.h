@@ -98,15 +98,47 @@ namespace rtti
 }
 #pragma endregion
 
+#pragma region InstanceFlags
+namespace rtti
+{
+	enum class InstanceFlags : uint8_t
+	{
+		None = 0,
+		Const = 1 << 0,
+		Ref = 1 << 1,
+	};
+
+	constexpr InstanceFlags operator|( InstanceFlags lVal, InstanceFlags rVal )
+	{
+		return static_cast< InstanceFlags >( static_cast< uint8_t >( lVal ) | static_cast< uint8_t >( rVal ) );
+	}
+
+	constexpr InstanceFlags operator&( InstanceFlags lVal, InstanceFlags rVal )
+	{
+		return static_cast< InstanceFlags >( static_cast< uint8_t >( lVal ) & static_cast< uint8_t >( rVal ) );
+	}
+
+	template< class T >
+	constexpr InstanceFlags GetInstanceFlags()
+	{
+		return ( std::is_const_v< std::remove_reference_t< T > > ? InstanceFlags::Const : InstanceFlags::None )
+			 | ( std::is_reference_v< T > ? InstanceFlags::Ref : InstanceFlags::None );
+	}
+}
+#pragma endregion
+
 #pragma region TypeOf
 namespace rtti
 {
 	namespace internal
 	{
-		template <typename> struct is_template : std::false_type {};
+		template < typename > struct is_template : std::false_type {};
 
-		template <template <typename...> class Tmpl, typename ...Args>
-		struct is_template<Tmpl<Args...>> : std::true_type {};
+		template < template < typename... > class Tmpl, typename ...Args>
+		struct is_template< Tmpl< Args... > > : std::true_type {};
+
+		template <template < typename... > class Tmpl, typename ...Args>
+		struct is_template< const Tmpl< Args... > > : std::true_type {};
 
 #if RTTI_CFG_CREATE_STD_SET_TYPE
 		template< class T >
@@ -114,6 +146,9 @@ namespace rtti
 
 		template< class T >
 		struct is_vector< std::vector< T > > : std::true_type {};
+
+		template< class T >
+		struct is_vector< const std::vector< T > > : std::true_type {};
 #endif
 
 #if RTTI_CFG_CREATE_STD_SET_TYPE
@@ -122,6 +157,9 @@ namespace rtti
 
 		template< class T >
 		struct is_set< std::unordered_set< T > > : std::true_type {};
+
+		template< class T >
+		struct is_set< const std::unordered_set< T > > : std::true_type {};
 #endif
 
 #if RTTI_CFG_CREATE_STD_PAIR_TYPE
@@ -130,6 +168,9 @@ namespace rtti
 
 		template< class T1, class T2 >
 		struct is_pair< std::pair< T1, T2 > > : std::true_type {};
+
+		template< class T1, class T2 >
+		struct is_pair< const std::pair< T1, T2 > > : std::true_type {};
 #endif
 
 #if RTTI_CFG_CREATE_STD_MAP_TYPE
@@ -138,6 +179,9 @@ namespace rtti
 
 		template< class T1, class T2 >
 		struct is_map< std::unordered_map< T1, T2 > > : std::true_type {};
+
+		template< class T1, class T2 >
+		struct is_map< const std::unordered_map< T1, T2 > > : std::true_type {};
 #endif
 
 #if RTTI_CFG_CREATE_STD_SHAREDPTR_TYPE
@@ -146,6 +190,9 @@ namespace rtti
 
 		template< class T >
 		struct is_sharedPtr< std::shared_ptr< T > > : std::true_type {};
+
+		template< class T >
+		struct is_sharedPtr< const std::shared_ptr< T > > : std::true_type {};
 #endif
 
 #if RTTI_CFG_CREATE_STD_UNIQUEPTR_TYPE
@@ -154,16 +201,25 @@ namespace rtti
 
 		template< class T >
 		struct is_uniquePtr< std::unique_ptr< T > > : std::true_type {};
+
+		template< class T >
+		struct is_uniquePtr< const std::unique_ptr< T > > : std::true_type {};
 #endif
 
 		template<class T>
 		struct is_array : std::false_type {};
 
 		template<class T, std::size_t N>
-		struct is_array<T[ N ]> : std::true_type {};
+		struct is_array< T[ N ] > : std::true_type {};
+
+		template<class T, std::size_t N>
+		struct is_array< const T[ N ] > : std::true_type {};
 
 		template<class T, std::size_t N>
 		struct is_array< std::array< T, N > > : std::true_type {};
+
+		template<class T, std::size_t N>
+		struct is_array< const std::array< T, N > > : std::true_type {};
 	}
 
 	template< class T, class T2 = void >
@@ -176,43 +232,43 @@ namespace rtti
 	struct type_of< T, std::enable_if_t< std::is_class_v< T > && !internal::is_template< T >::value && !internal::is_array< T >::value > > { using type = typename T::Type; };
 
 	template< class T >
-	struct type_of< T, std::enable_if_t< std::is_fundamental_v< T > && !std::is_same_v< T, void >  > > { using type = PrimitiveType< T >; };
+	struct type_of< T, std::enable_if_t< std::is_fundamental_v< T > && !std::is_same_v< T, void >  > > { using type = PrimitiveType< std::remove_cvref_t< T > >; };
 
 	template< class T >
-	struct type_of< T, std::enable_if_t< std::is_pointer_v< T > > > { using type = PointerType< std::remove_const_t< std::remove_pointer_t< T > > >; };
+	struct type_of< T, std::enable_if_t< std::is_pointer_v< T > > > { using type = PointerType< std::remove_pointer_t< T > >; };
 
 #if RTTI_CFG_CREATE_STD_VECTOR_TYPE
 	template< class T >
-	struct type_of< T, std::enable_if_t< internal::is_vector< T >::value > > { using type = VectorType< std::remove_const_t< typename T::value_type > >; };
+	struct type_of< T, std::enable_if_t< internal::is_vector< T >::value > > { using type = VectorType< typename T::value_type >; };
 #endif
 
 #if RTTI_CFG_CREATE_STD_SET_TYPE
 	template< class T >
-	struct type_of< T, std::enable_if_t< internal::is_set< T >::value > > { using type = SetType< std::remove_const_t< typename T::value_type > >; };
+	struct type_of< T, std::enable_if_t< internal::is_set< T >::value > > { using type = SetType< typename T::value_type >; };
 #endif
 
 #if RTTI_CFG_CREATE_STD_PAIR_TYPE
 	template< class T >
-	struct type_of< T, std::enable_if_t< internal::is_pair< T >::value > > { using type = internal::PairType< std::remove_const_t< typename T::first_type >, std::remove_const_t< typename T::second_type > >; };
+	struct type_of< T, std::enable_if_t< internal::is_pair< T >::value > > { using type = internal::PairType< typename T::first_type, typename T::second_type >; };
 #endif
 
 #if RTTI_CFG_CREATE_STD_MAP_TYPE
 	template< class T >
-	struct type_of< T, std::enable_if_t< internal::is_map< T >::value > > { using type = MapType< std::remove_const_t< typename T::key_type >, std::remove_const_t< typename T::mapped_type > >; };
+	struct type_of< T, std::enable_if_t< internal::is_map< T >::value > > { using type = MapType< typename T::key_type, typename T::mapped_type >; };
 #endif
 
 #if RTTI_CFG_CREATE_STD_SHAREDPTR_TYPE
 	template< class T >
-	struct type_of< T, std::enable_if_t< internal::is_sharedPtr< T >::value > > { using type = SharedPtrType< std::remove_const_t< typename T::element_type > >; };
+	struct type_of< T, std::enable_if_t< internal::is_sharedPtr< T >::value > > { using type = SharedPtrType< typename T::element_type >; };
 #endif
 
 #if RTTI_CFG_CREATE_STD_UNIQUEPTR_TYPE
 	template< class T >
-	struct type_of< T, std::enable_if_t< internal::is_uniquePtr< T >::value > > { using type = UniquePtrType< std::remove_const_t< typename T::element_type > >; };
+	struct type_of< T, std::enable_if_t< internal::is_uniquePtr< T >::value > > { using type = UniquePtrType< typename T::element_type >; };
 #endif
 
 	template< class T >
-	struct type_of< T, std::enable_if_t< internal::is_array< T >::value > >{ private: using internalType = std::remove_reference_t< decltype( *std::begin( std::declval< T& >() ) ) >; public: using type = ArrayType< std::remove_const_t< internalType >, sizeof( T ) / sizeof( internalType ) >; };
+	struct type_of< T, std::enable_if_t< internal::is_array< T >::value > >{ private: using internalType = std::remove_cvref_t< decltype( *std::begin( std::declval< T& >() ) ) >; public: using type = ArrayType< internalType, sizeof( T ) / sizeof( internalType ) >; };
 
 	template< class T >
 	const typename type_of< T >::type& GetTypeInstanceOf()
@@ -459,23 +515,72 @@ namespace rtti
 			return m_type;
 		}
 
+		bool HasFlags( InstanceFlags flags ) const
+		{
+			return ( flags & m_instanceFlags ) == flags;
+		}
+
 	private:
-		Property( const char* name, size_t offset, const Type& type )
+		Property( const char* name, size_t offset, const Type& type, InstanceFlags flags )
 			: m_name( name )
 			, m_id( internal::CalcHash( name ) )
 			, m_offset( offset )
 			, m_type( type )
+			, m_instanceFlags( flags )
 		{}
 
 		const char* m_name = nullptr;
 		ID m_id = 0u;
 		size_t m_offset = 0u;
 		const Type& m_type;
+		InstanceFlags m_instanceFlags = InstanceFlags::None;
 	};
 }
 
 #define RTTI_REGISTER_PROPERTY( PropertyName ) m_properties.emplace_back( CreateProperty< decltype( CurrentlyImplementedType::##PropertyName ) >( #PropertyName, offsetof( CurrentlyImplementedType, PropertyName ) ) );
+#pragma endregion
 
+#pragma region InternalTypeDesc
+namespace rtti
+{
+	class InternalTypeDesc
+	{
+	public:
+		InternalTypeDesc( const Type& type, InstanceFlags flags )
+			: m_type( type )
+			, m_flags( flags )
+		{}
+
+		const Type& GetType() const
+		{
+			return m_type;
+		}
+
+		std::string ConstructName() const
+		{
+			std::string name;
+			AppendName( name );
+
+			return name;
+		}
+
+		void AppendName( std::string& destination ) const;
+
+		bool HasFlags( InstanceFlags flags ) const
+		{
+			return ( m_flags & flags ) == flags;
+		}
+
+		InstanceFlags GetFlags() const
+		{
+			return m_flags;
+		}
+
+	private:
+		const Type& m_type;
+		InstanceFlags m_flags = InstanceFlags::None;
+	};
+}
 #pragma endregion
 
 #pragma region Methods
@@ -495,24 +600,29 @@ namespace rtti
 				uint8_t* argAddress = reinterpret_cast< uint8_t* >( args );
 				const size_t offset = ( alignof( T ) - ( reinterpret_cast< size_t >( argAddress ) & ( alignof( T ) - 1 ) ) ) & ( alignof( T ) - 1 );
 				argAddress = argAddress + offset;
-				Call< Index + 1 >( func, obj, reinterpret_cast< void* >( argAddress + sizeof( T ) ), returnVal, pack..., *reinterpret_cast< T* >( argAddress ) );
+				Call< Index + 1 >( func, obj, reinterpret_cast< void* >( argAddress + sizeof( T ) ), returnVal, pack..., *reinterpret_cast< std::remove_reference_t< T >* >( argAddress ) );
 			}
 
 			template< size_t Index = 0u, class... Args >
-			static std::enable_if_t< Index == ArgsAmount && !std::is_same_v<void, R>, void > Call( R( TObj::* func )( TArgs... ), void* obj, void* args, void* returnVal, Args... pack )
+			static std::enable_if_t< Index == ArgsAmount && !std::is_same_v< void, R >, void > Call( R( TObj::* func )( TArgs... ), void* obj, void* args, void* returnVal, Args&&... pack )
 			{
-				*( R* )returnVal = ( reinterpret_cast< TObj* >( obj )->*func )( pack... );
+				*( std::remove_reference_t< R >* )returnVal = ( reinterpret_cast< TObj* >( obj )->*func )( std::forward< Args >( pack )... );
 			}
 
 			template< size_t Index = 0u, class... Args >
-			static std::enable_if_t< Index == ArgsAmount && std::is_same_v<void, R>, void > Call( R( TObj::* func )( TArgs... ), void* obj, void* args, void* returnVal, Args... pack )
+			static std::enable_if_t< Index == ArgsAmount && std::is_same_v< void, R >, void > Call( R( TObj::* func )( TArgs... ), void* obj, void* args, void* returnVal, Args&&... pack )
 			{
-				( reinterpret_cast< TObj* >( obj )->*func )( pack... );
+				( reinterpret_cast< TObj* >( obj )->*func )( std::forward< Args >( pack )... );
 			}
 
-			static const rtti::Type* GetReturnType()
+			static const rtti::Type* GetReturnTypeDesc()
 			{
-				return internal::GetTypeInstanceOrNull< R >();
+				return internal::GetTypeInstanceOrNull< std::remove_cvref_t< R > >();
+			}
+
+			static InstanceFlags GetReturnTypeDescInstanceFlags()
+			{
+				return GetInstanceFlags< R >();
 			}
 		};
 	}
@@ -534,10 +644,12 @@ namespace rtti
 		template< class TFunc >
 		static void VisitArgumentTypes( const TFunc& func )
 		{
-			func( rtti::GetTypeInstanceOf< TArg >() );
+			func( GetTypeInstanceOf< std::remove_cvref_t< TArg > >(), GetInstanceFlags< TArg >() );
 			method_signature< R( TObj::* )( TArgs... ) >::VisitArgumentTypes( func );
 		}
 	};
+
+	using ParameterTypeDesc = InternalTypeDesc;
 
 	class Function
 	{
@@ -554,19 +666,19 @@ namespace rtti
 			return m_parameterTypes.size();
 		}
 
-		const Type* GetParameterType( size_t index ) const
+		const ParameterTypeDesc* GetParameterTypeDesc( size_t index ) const
 		{
 			if ( index < m_parameterTypes.size() )
 			{
-				return m_parameterTypes[ index ];
+				return &m_parameterTypes[ index ];
 			}
 
 			return nullptr;
 		}
 
-		const Type* GetReturnType() const
+		const ParameterTypeDesc* GetReturnTypeDesc() const
 		{
-			return m_returnType;
+			return m_returnTypeDesc.get();
 		}
 
 		void Call( void* obj, void* args, void* ret ) const
@@ -576,16 +688,21 @@ namespace rtti
 
 	private:
 		using InternalFuncType = std::function< void( void*, void*, void* ) >;
-		Function( const char* name, const Type* returnType, std::vector< const Type* > parameterTypes, InternalFuncType func )
+		Function( const char* name, std::vector< ParameterTypeDesc > parameterTypes, InternalFuncType func )
 			: m_name( name )
 			, m_parameterTypes( std::move( parameterTypes ) )
-			, m_returnType( returnType )
 			, m_func( std::move( func ) )
 		{}
 
+		Function( const char* name, const Type& returnType, InstanceFlags returnTypeFlags, std::vector< ParameterTypeDesc > parameterTypes, InternalFuncType func )
+			: Function( name, parameterTypes, func )
+		{
+			m_returnTypeDesc = std::make_unique< ParameterTypeDesc >( returnType, returnTypeFlags );
+		}
+
 		const char* m_name = nullptr;
-		std::vector< const Type* > m_parameterTypes;
-		const Type* m_returnType = nullptr;
+		std::vector< ParameterTypeDesc > m_parameterTypes;
+		std::unique_ptr< ParameterTypeDesc > m_returnTypeDesc;
 		InternalFuncType m_func;
 	};
 
@@ -751,40 +868,78 @@ namespace rtti
 		static size_t GetMethodsAmountStatic() { return 0u; }
 		static const ::rtti::Function* GetMethodStatic( size_t index ) { return nullptr; }
 
-		static ::rtti::Property CreateProperty( const char* name, size_t offset, const Type& type )
+		static ::rtti::Property CreateProperty( const char* name, size_t offset, const Type& type, InstanceFlags flags )
 		{
-			return ::rtti::Property( name, offset, type );
+			return ::rtti::Property( name, offset, type, flags );
 		}
 
 		template< class T >
 		static ::rtti::Property CreateProperty( const char* name, size_t offset )
 		{
-			return CreateProperty( name, offset, GetTypeInstanceOf< std::remove_const_t< T > >() );
+			static_assert( !std::is_reference_v< T >, "Reference properties are not supported!" );
+			static_assert( !std::is_const_v< T >, "Const properties are not supported!" );
+			return CreateProperty( name, offset, GetTypeInstanceOf< T >(), GetInstanceFlags< T >() );
+		}
+
+		template< class T >
+		static ::rtti::Property CreateInternalProperty( const char* name, size_t offset )
+		{
+			return CreateProperty( name, offset, GetTypeInstanceOf< T >(), GetInstanceFlags< T >() );
 		}
 
 		template< class TFunc >
 		static ::rtti::Function CreateFunction( const char* name, TFunc funcPtr )
 		{
 			using TNonConstFunc = internal::remove_const_from_func< TFunc >::type;
+			using MethodSignature = method_signature< TNonConstFunc >;
 			TNonConstFunc nonConstFuncPtr = reinterpret_cast< TNonConstFunc >( funcPtr );
 
-			std::vector< const ::rtti::Type* > parameterTypes;
-			method_signature< TNonConstFunc >::VisitArgumentTypes( [ &parameterTypes ]( const ::rtti::Type& type )
+			std::vector< ParameterTypeDesc > parameterTypes;
+			MethodSignature::VisitArgumentTypes( [ &parameterTypes ]( const Type& type, InstanceFlags flags )
 				{
-					parameterTypes.emplace_back( &type );
+					parameterTypes.push_back( { type, flags } );
 				} );
 
 			auto func = [ nonConstFuncPtr ]( void* obj, void* args, void* ret )
 				{
-					method_signature< TNonConstFunc >::Call( nonConstFuncPtr, obj, args, ret );
+					MethodSignature::Call( nonConstFuncPtr, obj, args, ret );
 				};
 
-			return ::rtti::Function( name, method_signature< TNonConstFunc >::GetReturnType(), std::move( parameterTypes ), std::move( func ) );
+			if ( MethodSignature::GetReturnTypeDesc() )
+			{
+				return ::rtti::Function( name, *MethodSignature::GetReturnTypeDesc(), MethodSignature::GetReturnTypeDescInstanceFlags(), std::move( parameterTypes ), std::move( func ) );
+			}
+			else
+			{
+				return ::rtti::Function( name, std::move( parameterTypes ), std::move( func ) );
+			}
+			
 		}
 
 	private:
 		ID m_id = 0u;
 	};
+}
+#pragma endregion
+
+#pragma region InternalTypeDescImpl
+namespace rtti
+{
+	inline void InternalTypeDesc::AppendName( std::string& destination ) const
+	{
+		destination.reserve( destination.size() + strlen( GetType().GetName() ) );
+		if ( HasFlags( InstanceFlags::Const ) )
+		{
+			destination += "const ";
+		}
+
+		destination += GetType().GetName();
+
+		if ( HasFlags( InstanceFlags::Ref ) )
+		{
+			destination += "&";
+		}
+	}
 }
 #pragma endregion
 
@@ -1023,18 +1178,18 @@ namespace rtti
 		public:
 			static ID CalcId()
 			{
-				ID id = internal::CalcHash( GetInternalTypeStatic().GetName() );
+				ID id = internal::CalcHash( GetInternalTypeDescStatic().GetType().GetName(), static_cast< uint8_t >( GetInternalTypeDescStatic().GetFlags() ) );
 				return internal::CalcHash( c_namePostfix, id );
 			}
 
-			static const typename type_of< T >::type& GetInternalTypeStatic()
+			static InternalTypeDesc GetInternalTypeDescStatic()
 			{
-				return GetTypeInstanceOf< T >();
+				return { GetTypeInstanceOf< T >(), GetInstanceFlags< T >() };
 			}
 
-			virtual const typename type_of< T >::type& GetInternalType() const override
+			virtual InternalTypeDesc GetInternalTypeDesc() const override
 			{
-				return GetInternalTypeStatic();
+				return GetInternalTypeDescStatic();
 			}
 
 			static const DerivedClass& GetInstance()
@@ -1050,7 +1205,7 @@ namespace rtti
 
 		protected:
 			PointerTypeImplementation()
-				: ParentClass( CalcId(), std::string( GetInternalTypeStatic().GetName() ) + c_namePostfix )
+				: ParentClass( CalcId(), GetInternalTypeDescStatic().ConstructName() + c_namePostfix)
 			{}
 
 			PointerTypeImplementation( ID typeId, std::string&& name )
@@ -1072,7 +1227,7 @@ namespace rtti
 	class PointerType< void > : public Type
 	{
 	public:
-		virtual const Type& GetInternalType() const = 0;
+		virtual InternalTypeDesc GetInternalTypeDesc() const = 0;
 
 		virtual void ConstructInPlace( void* dest ) const override
 		{
@@ -1126,13 +1281,13 @@ namespace rtti
 			{
 				ID id = internal::CalcHash( DerivedType::GetBaseName() );
 				id = internal::CalcHash( "< ", id );
-				const auto internalTypes = DerivedType::GetInternalTypesStatic();
-				id = internal::CalcHash( internalTypes[0u]->GetName(), id);
+				const auto internalTypes = DerivedType::GetInternalTypeDescsStatic();
+				id = internal::CalcHash( internalTypes[ 0u ].ConstructName().c_str(), id);
 
 				for ( size_t i = 1u; i < internalTypes.size(); ++i )
 				{
 					id = internal::CalcHash( ", ", id);
-					id = internal::CalcHash( internalTypes[ i ]->GetName(), id);
+					id = internal::CalcHash( internalTypes[ i ].ConstructName().c_str(), id);
 				}
 
 				return internal::CalcHash( " >", id );
@@ -1151,7 +1306,7 @@ namespace rtti
 
 			virtual void ConstructInPlace( void* dest ) const override
 			{
-				*static_cast< TrueType* >( dest ) = TrueType();
+				new ( dest ) TrueType();
 			}
 
 #if RTTI_REQUIRE_MOVE_CTOR
@@ -1175,22 +1330,16 @@ namespace rtti
 			TemplateType()
 				: ParentType( CalcId() )
 			{
-				size_t internalTypesNamesLength = 0u;
-				const auto internalTypes = DerivedType::GetInternalTypesStatic();
-				for ( const auto* type : internalTypes )
-				{
-					internalTypesNamesLength += strlen(type->GetName());
-				}
+				const auto internalTypes = DerivedType::GetInternalTypeDescsStatic();
 
-				m_name.reserve( strlen( DerivedType::GetBaseName() ) + internalTypesNamesLength + ( internalTypes.size() - 1 ) * 2u + 4u);
 				m_name += DerivedType::GetBaseName();
 				m_name += "< ";
-				m_name += internalTypes[ 0u ]->GetName();
+				internalTypes[ 0u ].AppendName( m_name );
 
 				for ( size_t i = 1u; i < internalTypes.size(); ++i )
 				{
 					m_name += ", ";
-					m_name += internalTypes[ i ]->GetName();
+					internalTypes[ i ].AppendName( m_name );
 				}
 
 				m_name += " >";
@@ -1230,24 +1379,24 @@ namespace rtti
 
 			static constexpr const char* GetBaseName() { return "Pair"; }
 
-			static const typename type_of< T1 >::type& GetFirstInternalTypeStatic()
+			static InternalTypeDesc GetFirstInternalTypeDescStatic()
 			{
-				return GetTypeInstanceOf< T1 >();
+				return { GetTypeInstanceOf< T1 >(), GetInstanceFlags< T1 >() };
 			}
 
-			static const typename type_of< T2 >::type& GetSecondInternalTypeStatic()
+			static InternalTypeDesc GetSecondInternalTypeDescStatic()
 			{
-				return GetTypeInstanceOf< T2 >();
+				return { GetTypeInstanceOf< T2 >(), GetInstanceFlags< T2 >() };
 			}
 
-			const typename type_of< T1 >::type& GetFirstInternalType() const
+			InternalTypeDesc GetFirstInternalTypeDesc() const
 			{
-				return GetFirstInternalTypeStatic();
+				return GetFirstInternalTypeDescStatic();
 			}
 
-			const typename type_of< T2 >::type& GetSecondInternalType() const
+			InternalTypeDesc GetSecondInternalTypeDesc() const
 			{
-				return GetSecondInternalTypeStatic();
+				return GetSecondInternalTypeDescStatic();
 			}
 
 			virtual void Destroy( void* address ) const override
@@ -1264,13 +1413,13 @@ namespace rtti
 			PairType()
 			{
 				using TrueType = std::pair< T1, T2 >;
-				m_properties.emplace_back( Type::CreateProperty< T1 >( "First", offsetof( TrueType, first ) ) );
-				m_properties.emplace_back( Type::CreateProperty< T2 >( "Second", offsetof( TrueType, second ) ) );
+				m_properties.emplace_back( Type::CreateInternalProperty< T1 >( "First", offsetof( TrueType, first ) ) );
+				m_properties.emplace_back( Type::CreateInternalProperty< T2 >( "Second", offsetof( TrueType, second ) ) );
 			}
 
-			static std::array<const Type*, 2> GetInternalTypesStatic()
+			static std::array< InternalTypeDesc, 2 > GetInternalTypeDescsStatic()
 			{
-				return { &GetFirstInternalTypeStatic(), &GetSecondInternalTypeStatic() };
+				return { GetFirstInternalTypeDescStatic(), GetSecondInternalTypeDescStatic() };
 			}
 
 			std::vector< ::rtti::Property > m_properties;
@@ -1291,7 +1440,7 @@ namespace rtti
 	class ContainerType : public Type
 	{
 	public:
-		virtual const Type& GetInternalType() const = 0;
+		virtual InternalTypeDesc GetInternalTypeDesc() const = 0;
 		virtual size_t GetElementsAmount( const void* address ) const = 0;
 
 		virtual void VisitElementsAsProperties( const void* containerAddress, const std::function< void( const rtti::Property& ) >& visitFunc ) const = 0;
@@ -1320,14 +1469,14 @@ namespace rtti
 			friend class TemplateType< DerivedType, TrueType, DynamicContainerType >;
 
 		public:
-			static const InternalType& GetInternalTypeStatic()
+			static InternalTypeDesc GetInternalTypeDescStatic()
 			{
-				return InternalType::GetInstance();
+				return { InternalType::GetInstance(), GetInstanceFlags< InternalType >() };
 			}
 
-			virtual const InternalType& GetInternalType() const override
+			virtual InternalTypeDesc GetInternalTypeDesc() const override
 			{
-				return InternalType::GetInstance();
+				return GetInternalTypeDescStatic();
 			}
 
 			virtual void VisitElementsAsProperties( const void* containerAddress, const std::function< void( const rtti::Property& ) >& visitFunc ) const override
@@ -1338,15 +1487,15 @@ namespace rtti
 					std::string name = "[";
 					name += std::to_string( i );
 					name += "]";
-					visitFunc( Type::CreateProperty( name.c_str(), reinterpret_cast< const uint8_t* >( &element ) - reinterpret_cast< const uint8_t* >( containerAddress ), GetInternalType() ) );
+					visitFunc( Type::CreateProperty( name.c_str(), reinterpret_cast< const uint8_t* >( &element ) - reinterpret_cast< const uint8_t* >( containerAddress ), GetInternalTypeDesc().GetType(), GetInternalTypeDesc().GetFlags() ) );
 					++i;
 				}
 			}
 
 		private:
-			static std::array< const Type*, 1 > GetInternalTypesStatic()
+			static std::array< InternalTypeDesc, 1 > GetInternalTypeDescsStatic()
 			{
-				return { &GetInternalTypeStatic() };
+				return { GetInternalTypeDescStatic() };
 			}
 		};
 	}
@@ -1364,7 +1513,7 @@ namespace rtti
 	public:
 		static ID CalcId()
 		{
-			ID id = internal::CalcHash( GetInternalTypeStatic().GetName() );
+			ID id = internal::CalcHash( GetInternalTypeDescStatic().GetType().GetName(), static_cast< uint8_t >( GetInternalTypeDescStatic().GetFlags() ) );
 			id = internal::CalcHash( "[", id );
 			id = internal::CalcHash( std::to_string( Count ).c_str(), id );
 			return internal::CalcHash( "]", id );
@@ -1375,14 +1524,14 @@ namespace rtti
 			return ::rtti::RTTI::GetMutable().GetOrRegisterType< ArrayType >();
 		}
 
-		static const Type& GetInternalTypeStatic()
+		static InternalTypeDesc GetInternalTypeDescStatic()
 		{
-			return GetTypeInstanceOf< T >();
+			return { GetTypeInstanceOf< T >(), GetInstanceFlags< T >() };
 		}
 
-		const Type& GetInternalType() const override
+		InternalTypeDesc GetInternalTypeDesc() const override
 		{
-			return GetInternalTypeStatic();
+			return GetInternalTypeDescStatic();
 		}
 
 		const char* GetName() const override
@@ -1402,34 +1551,37 @@ namespace rtti
 
 		void ConstructInPlace( void* dest ) const override
 		{
-			T* arr = static_cast< T* >( dest );
+			using TNonConst = std::remove_const_t< T >;
+			TNonConst* arr = static_cast< TNonConst* >( dest );
 
 			for ( size_t i = 0u; i < Count; ++i )
 			{
-				GetInternalType().ConstructInPlace( &arr[ i ] );
+				GetInternalTypeDesc().GetType().ConstructInPlace( &arr[ i ] );
 			}
 		}
 
 #if RTTI_REQUIRE_MOVE_CTOR
 		virtual void MoveInPlace( void* dest, void* src ) const override
 		{
-			T* destArr = new ( dest ) T[ Count ];
-			T* sourceArr = static_cast< T* >( src );
+			using TNonConst = std::remove_const_t< T >;
+			TNonConst* destArr = new ( dest ) TNonConst[ Count ];
+			TNonConst* sourceArr = static_cast< TNonConst* >( src );
 
 			for ( size_t i = 0u; i < Count; ++i )
 			{
-				GetInternalType().MoveInPlace( &destArr[ i ], &sourceArr[ i ] );
+				GetInternalTypeDesc().GetType().MoveInPlace( &destArr[ i ], &sourceArr[ i ] );
 			}
 		}
 #endif
 
 		void Destroy( void* address ) const override
 		{
-			T* arr = static_cast< T* >( address );
+			using TNonConst = std::remove_const_t< T >;
+			TNonConst* arr = static_cast< TNonConst* >( address );
 
 			for ( size_t i = 0u; i < Count; ++i )
 			{
-				GetInternalType().Destroy( &arr[ i ] );
+				GetInternalTypeDesc().GetType().Destroy( &arr[i] );
 			}
 		}
 
@@ -1450,7 +1602,7 @@ namespace rtti
 				std::string name = "[";
 				name += std::to_string( i );
 				name += "]";
-				visitFunc( Type::CreateProperty( name.c_str(), i * GetInternalType().GetSize(), GetInternalType() ) );
+				visitFunc( Type::CreateProperty( name.c_str(), i * GetInternalTypeDesc().GetType().GetSize(), GetInternalTypeDesc().GetType(), GetInternalTypeDesc().GetFlags() ) );
 			}
 		}
 
@@ -1458,8 +1610,7 @@ namespace rtti
 		ArrayType()
 			: ContainerType( CalcId() )
 		{
-			m_name.reserve( strlen( GetInternalType().GetName() ) + 10 );
-			m_name += GetInternalType().GetName();
+			GetInternalTypeDesc().AppendName( m_name );
 			m_name += "[";
 			m_name += std::to_string( Count );
 			m_name += "]";
@@ -1634,9 +1785,9 @@ namespace rtti
 		}
 
 	private:
-		static std::array<const Type*, 2> GetInternalTypesStatic()
+		static std::array< InternalTypeDesc, 2 > GetInternalTypeDescsStatic()
 		{
-			return internal::PairType< TKey, TValue >::GetInternalTypesStatic();
+			return internal::PairType< TKey, TValue >::GetInternalTypeDescsStatic();
 		}
 	};
 }
@@ -1726,7 +1877,7 @@ namespace rtti
 			return ::rtti::RTTI::GetMutable().GetOrRegisterType< RuntimeType >( std::move( name ) );
 		}
 
-		const ::rtti::Property& AddProperty( const char* name, const Type& type )
+		const ::rtti::Property& AddProperty( const char* name, const Type& type, InstanceFlags flags )
 		{
 			size_t currentOffset = ParentType::GetSize();
 			
@@ -1737,7 +1888,7 @@ namespace rtti
 				currentOffset = ( ( currentOffset + ( type.GetAlignment() - 1u ) ) & ~( type.GetAlignment() - 1u ) );
 			}
 
-			m_properties.emplace_back( ::rtti::Type::CreateProperty( name, currentOffset, type ) );
+			m_properties.emplace_back( ::rtti::Type::CreateProperty( name, currentOffset, type, flags ) );
 			m_size = currentOffset - ParentType::GetSize() + type.GetSize();
 			m_alignment = std::max( m_alignment, type.GetAlignment() );
 			return m_properties.back();
@@ -1746,7 +1897,7 @@ namespace rtti
 		template< class T >
 		const ::rtti::Property& AddProperty( const char* name )
 		{
-			return AddProperty( name, GetTypeInstanceOf< T >() );
+			return AddProperty( name, GetTypeInstanceOf< T >(), GetInstanceFlags< T >() );
 		}
 
 		virtual const char* GetName() const override
@@ -1850,7 +2001,7 @@ namespace rtti
 		virtual void SetPointedAddress( void* address, void* pointedAddress ) const = 0;
 		virtual void AssignSharedPtr( void* src, void* dest ) const = 0;
 
-		virtual const Type& GetInternalType() const = 0;
+		virtual InternalTypeDesc GetInternalTypeDesc() const = 0;
 
 	protected:
 		using rtti::Type::Type;
@@ -1861,16 +2012,17 @@ namespace rtti
 	{
 		friend class ::rtti::RTTI;
 		friend class internal::TemplateType< SharedPtrType, std::shared_ptr< T >, rtti::SharedPtrBaseType >;
+		using TNonConst = std::remove_const_t< T >;
 
 	public:
-		static const typename type_of< T >::type& GetInternalTypeStatic()
+		static InternalTypeDesc GetInternalTypeDescStatic()
 		{
-			return GetTypeInstanceOf< T >();
+			return { GetTypeInstanceOf< T >(), GetInstanceFlags< T >() };
 		}
 
-		virtual const typename type_of< T >::type& GetInternalType() const override
+		virtual InternalTypeDesc GetInternalTypeDesc() const override
 		{
-			return GetInternalTypeStatic();
+			return GetInternalTypeDescStatic();
 		}
 
 		virtual void Destroy( void* address ) const override
@@ -1880,7 +2032,7 @@ namespace rtti
 
 		virtual void* GetPointedAddress( void* address ) const override
 		{
-			return static_cast< std::shared_ptr< T >* >( address )->get();
+			return static_cast< std::shared_ptr< TNonConst >* >( address )->get();
 		}
 
 		virtual const void* GetPointedAddress( const void* address ) const override
@@ -1890,8 +2042,8 @@ namespace rtti
 
 		virtual void SetPointedAddress( void* address, void* pointedAddress ) const
 		{
-			auto* ptr = static_cast< std::shared_ptr< T >* >( address );
-			*ptr = std::shared_ptr< T >( static_cast< T* >( pointedAddress ) );
+			auto* ptr = static_cast< std::shared_ptr< TNonConst >* >( address );
+			*ptr = std::shared_ptr< TNonConst >( static_cast< TNonConst* >( pointedAddress ) );
 		}
 
 		virtual void AssignSharedPtr( void* src, void* dest ) const
@@ -1902,9 +2054,9 @@ namespace rtti
 		}
 
 	private:
-		static std::array<const Type*, 1> GetInternalTypesStatic()
+		static std::array< InternalTypeDesc, 1 > GetInternalTypeDescsStatic()
 		{
-			return { &GetInternalTypeStatic() };
+			return { GetInternalTypeDescStatic() };
 		}
 	};
 }
@@ -1929,7 +2081,7 @@ namespace rtti
 		virtual const void* GetPointedAddress( const void* address ) const = 0;
 		virtual void SetPointedAddress( void* address, void* pointedAddress ) const = 0;
 
-		virtual const Type& GetInternalType() const = 0;
+		virtual InternalTypeDesc GetInternalTypeDesc() const = 0;
 
 	protected:
 		using rtti::Type::Type;
@@ -1940,16 +2092,17 @@ namespace rtti
 	{
 		friend class ::rtti::RTTI;
 		friend class internal::TemplateType< UniquePtrType< T >, std::unique_ptr< T >, UniquePtrBaseType >;
+		using TNonConst = std::remove_const_t< T >;
 
 	public:
-		static const typename type_of< T >::type& GetInternalTypeStatic()
+		static InternalTypeDesc GetInternalTypeDescStatic()
 		{
-			return GetTypeInstanceOf< T >();
+			return { GetTypeInstanceOf< T >(), GetInstanceFlags< T >() };
 		}
 
-		virtual const typename type_of< T >::type& GetInternalType() const override
+		virtual InternalTypeDesc GetInternalTypeDesc() const override
 		{
-			return GetInternalTypeStatic();
+			return GetInternalTypeDescStatic();
 		}
 
 		virtual void Destroy( void* address ) const override
@@ -1959,7 +2112,7 @@ namespace rtti
 
 		virtual void* GetPointedAddress( void* address ) const override
 		{
-			return static_cast< std::unique_ptr< T >* >( address )->get();
+			return static_cast< std::unique_ptr< TNonConst >* >( address )->get();
 		}
 
 		virtual const void* GetPointedAddress( const void* address ) const override
@@ -1969,14 +2122,14 @@ namespace rtti
 
 		virtual void SetPointedAddress( void* address, void* pointedAddress ) const
 		{
-			auto* ptr = static_cast< std::unique_ptr< T >* >( address );
-			*ptr = std::unique_ptr< T >( static_cast< T* >( pointedAddress ) );
+			auto* ptr = static_cast< std::unique_ptr< TNonConst >* >( address );
+			*ptr = std::unique_ptr< TNonConst >( static_cast< TNonConst* >( pointedAddress ) );
 		}
 
 	private:
-		static std::array<const Type*, 1> GetInternalTypesStatic()
+		static std::array< InternalTypeDesc, 1 > GetInternalTypeDescsStatic()
 		{
-			return { &GetInternalTypeStatic() };
+			return { GetInternalTypeDescStatic() };
 		}
 	};
 }

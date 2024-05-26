@@ -39,6 +39,10 @@ TEST( TestCaseName, TypeNameAsString )
 	EXPECT_TRUE( strcmp( ::rtti::GetTypeInstanceOf< std::unordered_map< Float, Bool > >().GetName(), "Map< float, bool >" ) == 0 );
 	EXPECT_TRUE( strcmp( ::rtti::GetTypeInstanceOf< std::shared_ptr< rttiTest::A > >().GetName(), "SharedPtr< rttiTest::A >" ) == 0 );
 	EXPECT_TRUE( strcmp( ::rtti::GetTypeInstanceOf< std::unique_ptr< rttiTest::A > >().GetName(), "UniquePtr< rttiTest::A >" ) == 0 );
+	EXPECT_TRUE( strcmp( ::rtti::GetTypeInstanceOf< std::pair< const Float, const Bool > >().GetName(), "Pair< const float, const bool >" ) == 0 );
+	EXPECT_TRUE( strcmp( ::rtti::GetTypeInstanceOf< std::unordered_map< Float, const Bool > >().GetName(), "Map< float, const bool >" ) == 0 );
+	EXPECT_TRUE( strcmp( ::rtti::GetTypeInstanceOf< std::shared_ptr< const rttiTest::A > >().GetName(), "SharedPtr< const rttiTest::A >" ) == 0 );
+	EXPECT_TRUE( strcmp( ::rtti::GetTypeInstanceOf< std::unique_ptr< const rttiTest::A > >().GetName(), "UniquePtr< const rttiTest::A >" ) == 0 );
 }
 
 TEST( TestCaseName, IsA )
@@ -381,7 +385,6 @@ namespace rttiTest
 		A**** m_userTypePtr = nullptr;
 		StructWithProperties**** m_pointerToOwnerType = nullptr;
 		std::vector< Float > m_vectorFloat;
-		const Float m_constFloat = 0.0f;
 		const Float* m_constPtr = nullptr;
 		std::vector< const Float* > m_vectorOfPtrs;
 		std::vector< Float >* m_ptrToVector = nullptr;
@@ -413,7 +416,6 @@ RTTI_IMPLEMENT_TYPE( rttiTest::StructWithProperties,
 	RTTI_REGISTER_PROPERTY( m_userTypePtr );
 	RTTI_REGISTER_PROPERTY( m_pointerToOwnerType );
 	RTTI_REGISTER_PROPERTY( m_vectorFloat );
-	RTTI_REGISTER_PROPERTY( m_constFloat );
 	RTTI_REGISTER_PROPERTY( m_constPtr );
 	RTTI_REGISTER_PROPERTY( m_vectorOfPtrs );
 	RTTI_REGISTER_PROPERTY( m_ptrToVector );
@@ -651,7 +653,7 @@ TEST( TestCaseName, Pointers )
 			const ::rtti::Type* type = &inType;
 			for ( Uint32 i = 0u; i < deepness; ++i )
 			{
-				type = &static_cast< const ::rtti::PointerType<>* >( type )->GetInternalType();
+				type = &static_cast< const ::rtti::PointerType<>* >( type )->GetInternalTypeDesc().GetType();
 			}
 
 			return type;
@@ -692,13 +694,13 @@ static void TestContainer( const ::rtti::ContainerType* containerType )
 {
 	ASSERT_TRUE( containerType );
 
-	containerType = dynamic_cast< const ::rtti::ContainerType* >( &containerType->GetInternalType() );
+	containerType = dynamic_cast< const ::rtti::ContainerType* >( &containerType->GetInternalTypeDesc().GetType() );
 	ASSERT_TRUE( containerType );
 
-	containerType = dynamic_cast< const ::rtti::ContainerType* >( &containerType->GetInternalType() );
+	containerType = dynamic_cast< const ::rtti::ContainerType* >( &containerType->GetInternalTypeDesc().GetType() );
 	ASSERT_TRUE( containerType );
 
-	const ::rtti::PrimitiveType< Float >* floatType = dynamic_cast< const ::rtti::PrimitiveType< Float >* >( &containerType->GetInternalType() );
+	const ::rtti::PrimitiveType< Float >* floatType = dynamic_cast< const ::rtti::PrimitiveType< Float >* >( &containerType->GetInternalTypeDesc().GetType() );
 	ASSERT_TRUE( floatType );
 }
 
@@ -752,15 +754,16 @@ TEST( TestCaseName, PointerTypesInheritance )
 TEST( TestCaseName, Pairs )
 {
 	const auto& type = ::rtti::GetTypeInstanceOf< std::pair< std::pair< Bool, Double >, std::pair< Int32, Float > > >();
-	EXPECT_EQ( ( type.GetFirstInternalType() ), ( ::rtti::GetTypeInstanceOf< std::pair< Bool, Double > >() ) ) ;
-	EXPECT_EQ( ( type.GetSecondInternalType() ), ( ::rtti::GetTypeInstanceOf< std::pair< Int32, Float > >() ) );
+	EXPECT_EQ( ( type.GetFirstInternalTypeDesc().GetType() ), ( ::rtti::GetTypeInstanceOf< std::pair< Bool, Double > >() ) ) ;
+	EXPECT_EQ( ( type.GetSecondInternalTypeDesc().GetType() ), ( ::rtti::GetTypeInstanceOf< std::pair< Int32, Float > >() ) );
 }
 
 TEST( TestCaseName, Maps )
 {
 	const auto& type = ::rtti::GetTypeInstanceOf< std::unordered_map< Double, std::unordered_map< Int32, Float > > >();
-	EXPECT_EQ( ( type.GetInternalType().GetFirstInternalType() ), ( ::rtti::GetTypeInstanceOf< Double >() ));
-	EXPECT_EQ( ( type.GetInternalType().GetSecondInternalType() ), ( ::rtti::GetTypeInstanceOf< std::unordered_map< Int32, Float > >() ));
+	const auto& internalType = static_cast< const ::rtti::PairType< Double, std::unordered_map< Int32, Float > >& >( type.GetInternalTypeDesc().GetType() );
+	EXPECT_EQ( ( internalType.GetFirstInternalTypeDesc().GetType() ), ( ::rtti::GetTypeInstanceOf< Double >() ));
+	EXPECT_EQ( ( internalType.GetSecondInternalTypeDesc().GetType() ), ( ::rtti::GetTypeInstanceOf< std::unordered_map< Int32, Float > >() ));
 }
 
 TEST( TestCaseName, RuntimeTypeWrittingAndReading )
@@ -824,7 +827,7 @@ TEST( TestCaseName, RuntimeTypePropertiesWithAllignment )
 		for ( Uint32 i = 0u; i < someType.GetPropertiesAmount(); ++i )
 		{
 			const auto& property = someType.GetProperty( i );
-			testType.AddProperty( property->GetName(), property->GetType() );
+			testType.AddProperty( property->GetName(), property->GetType(), rtti::InstanceFlags::None );
 		}
 
 		TestRuntimeType( testType );
@@ -839,15 +842,33 @@ TEST( TestCaseName, RuntimeTypePropertiesWithAllignment )
 TEST( TestCaseName, SharedPtrs )
 {
 	const auto& type = ::rtti::GetTypeInstanceOf< std::shared_ptr< std::shared_ptr< Float > > >();
-	EXPECT_EQ( type.GetInternalType(), ::rtti::GetTypeInstanceOf< std::shared_ptr< Float > >() );
-	EXPECT_EQ( type.GetInternalType().GetInternalType(), ::rtti::GetTypeInstanceOf < Float >() );
+	EXPECT_EQ( type.GetInternalTypeDesc().GetType(), ::rtti::GetTypeInstanceOf< std::shared_ptr< Float > >() );
+	const auto& internalType = static_cast< const ::rtti::SharedPtrType< Float >& >( type.GetInternalTypeDesc().GetType() );
+	EXPECT_EQ( internalType.GetInternalTypeDesc().GetType(), ::rtti::GetTypeInstanceOf < Float >() );
 }
 
 TEST( TestCaseName, UniquePtrs )
 {
 	const auto& type = ::rtti::GetTypeInstanceOf< std::unique_ptr< std::unique_ptr< Float > > >();
-	EXPECT_EQ( type.GetInternalType(), ::rtti::GetTypeInstanceOf< std::unique_ptr< Float > >() );
-	EXPECT_EQ( type.GetInternalType().GetInternalType(), ::rtti::GetTypeInstanceOf < Float >() );
+	EXPECT_EQ( type.GetInternalTypeDesc().GetType(), ::rtti::GetTypeInstanceOf< std::unique_ptr< Float > >() );
+	const auto& internalType = static_cast< const ::rtti::UniquePtrType< Float >& >( type.GetInternalTypeDesc().GetType() );
+	EXPECT_EQ( internalType.GetInternalTypeDesc().GetType(), ::rtti::GetTypeInstanceOf < Float >() );
+}
+
+TEST( TestCaseName, InstanceFlags )
+{
+	const auto& type = rttiTest::StructWithProperties::GetTypeStatic();
+
+	EXPECT_FALSE( type.FindProperty( "m_constPtr" )->HasFlags( ::rtti::InstanceFlags::Ref ) );
+	EXPECT_FALSE( type.FindProperty( "m_constPtr" )->HasFlags( ::rtti::InstanceFlags::Const ) );
+
+	const auto* prop = type.FindProperty( "m_constPtr" );
+	ASSERT_TRUE( prop );
+
+	const auto& internalType = static_cast< const ::rtti::PointerType< void >& >( prop->GetType() );
+
+	EXPECT_FALSE( internalType.GetInternalTypeDesc().HasFlags( ::rtti::InstanceFlags::Ref ) );
+	EXPECT_TRUE( internalType.GetInternalTypeDesc().HasFlags( ::rtti::InstanceFlags::Const ) );
 }
 
 namespace rttiTest
@@ -860,12 +881,13 @@ namespace rttiTest
 		Int32 FooFunc2() { return 123; }
 
 		Int32 FooSum( const Int32 a, Int32 b ){ return a + b; }
-		//void FooRef( Int32& ref ) { ref = 123; }
+		void FooRef( Int32& ref ) { ++ref; }
 		Int32 FooConstRef( const Int32& ref ) { return ref; }
 		void FooPtr( Int32* ptr ) { *ptr = 123; }
 		Int32 FooConstPtr( const Int32* ptr ) { return *ptr; }
 		Float FooGet() const { return m_floatVar; }
 		void FooSet( Float val ) { m_floatVar = val; }
+		Int32& FooGetRef() { static Int32 f = 123; return f; }
 
 		Float m_floatVar = 3.14f;
 	};
@@ -875,41 +897,48 @@ RTTI_IMPLEMENT_TYPE( rttiTest::CFoo,
 	RTTI_REGISTER_METHOD( FooFunc );
 	RTTI_REGISTER_METHOD( FooFunc2 );
 	RTTI_REGISTER_METHOD( FooSum );
+	RTTI_REGISTER_METHOD( FooRef ); 
+	RTTI_REGISTER_METHOD( FooConstRef );
 	RTTI_REGISTER_METHOD( FooPtr );
 	RTTI_REGISTER_METHOD( FooConstPtr );
 	RTTI_REGISTER_METHOD( FooGet );
 	RTTI_REGISTER_METHOD( FooSet );
+	RTTI_REGISTER_METHOD( FooGetRef );
 );
 
 TEST( TestCaseName, MethodSignature )
 {
 	std::vector< const rtti::Type* > types;
-	rtti::method_signature< decltype( &CFoo::FooFunc ) >::VisitArgumentTypes( [ & ](const rtti::Type& type) { types.emplace_back( &type ); } );
+	rtti::method_signature< decltype( &CFoo::FooFunc ) >::VisitArgumentTypes( [ & ]( const auto& type, rtti::InstanceFlags flags ) { types.emplace_back( &type ); } );
 	EXPECT_EQ( types[ 0 ], &rtti::GetTypeInstanceOf< Int32 >() );
 	EXPECT_EQ( types[ 1 ], &rtti::GetTypeInstanceOf< Float >() );
 	EXPECT_EQ( types[ 2 ], &rtti::GetTypeInstanceOf< AAA >() );
 	EXPECT_EQ( types[ 3 ], &rtti::GetTypeInstanceOf< std::vector< Bool > >() );
-	EXPECT_EQ( rtti::method_signature< decltype( &CFoo::FooFunc ) >::GetReturnType(), nullptr );
-	EXPECT_EQ( rtti::method_signature< decltype( &CFoo::FooFunc2 ) >::GetReturnType(), &rtti::GetTypeInstanceOf< Int32 >() );
+	EXPECT_EQ( rtti::method_signature< decltype( &CFoo::FooFunc ) >::GetReturnTypeDesc(), nullptr );
+	EXPECT_EQ( rtti::method_signature< decltype( &CFoo::FooFunc2 ) >::GetReturnTypeDesc(), &rtti::GetTypeInstanceOf< Int32 >() );
 }
 
 TEST( TestCaseName, TypeMethods )
 {
 	const auto& type = rttiTest::CFoo::GetTypeStatic();
-	EXPECT_EQ( type.GetMethodsAmount(), 7 );
+	EXPECT_EQ( type.GetMethodsAmount(), 10 );
 
 	const auto* method = type.GetMethod( 0 );
 	EXPECT_EQ( method->GetParametersAmount(), 4 );
 
 	EXPECT_EQ( method->GetParametersAmount(), 4 );
-	EXPECT_EQ( method->GetParameterType( 0 ), &rtti::GetTypeInstanceOf< Int32 >() );
-	EXPECT_EQ( method->GetParameterType( 1 ), &rtti::GetTypeInstanceOf< Float >() );
-	EXPECT_EQ( method->GetParameterType( 2 ), &rtti::GetTypeInstanceOf< AAA >() );
-	EXPECT_EQ( method->GetParameterType( 3 ), &rtti::GetTypeInstanceOf< std::vector< Bool > >() );
-	EXPECT_EQ( method->GetReturnType(), nullptr );
+	EXPECT_EQ( &method->GetParameterTypeDesc( 0 )->GetType(), &rtti::GetTypeInstanceOf< Int32 >() );
+	EXPECT_EQ( &method->GetParameterTypeDesc( 1 )->GetType(), &rtti::GetTypeInstanceOf< Float >() );
+	EXPECT_EQ( &method->GetParameterTypeDesc( 2 )->GetType(), &rtti::GetTypeInstanceOf< AAA >() );
+	EXPECT_EQ( &method->GetParameterTypeDesc( 3 )->GetType(), &rtti::GetTypeInstanceOf< std::vector< Bool > >() );
+	EXPECT_EQ( method->GetReturnTypeDesc(), nullptr );
 
-	EXPECT_EQ( type.GetMethod( 1 )->GetReturnType(), &rtti::GetTypeInstanceOf< Int32 >() );
+	EXPECT_EQ( &type.GetMethod( 1 )->GetReturnTypeDesc()->GetType(), &rtti::GetTypeInstanceOf< Int32 >());
 	EXPECT_EQ( type.GetMethod( 1 )->GetParametersAmount(), 0 );
+
+	EXPECT_TRUE( type.FindMethod( "FooRef" )->GetParameterTypeDesc( 0 )->HasFlags( ::rtti::InstanceFlags::Ref ) );
+	EXPECT_TRUE( type.FindMethod( "FooConstRef" )->GetParameterTypeDesc( 0 )->HasFlags( ::rtti::InstanceFlags::Ref | ::rtti::InstanceFlags::Const ) );
+	EXPECT_TRUE( type.FindMethod( "FooGetRef" )->GetReturnTypeDesc()->HasFlags( ::rtti::InstanceFlags::Ref ) );
 }
 
 TEST( TestCaseName, FindingMethods )
@@ -974,4 +1003,53 @@ TEST( TestCaseName, CallingMethods )
 		method->Call( &obj, nullptr, &result );
 		EXPECT_EQ( result, obj.m_floatVar );
 	}
+
+	{
+		Int32 a = 0;
+		const auto* method = type.FindMethod( "FooRef" );
+		method->Call( &obj, &a, nullptr );
+		EXPECT_EQ( a, 1 );
+
+		method->Call( &obj, &a, nullptr );
+		EXPECT_EQ( a, 2 );
+
+		method->Call( &obj, &a, nullptr );
+		EXPECT_EQ( a, 3 );
+
+		method->Call( &obj, &a, nullptr );
+		EXPECT_EQ( a, 4 );
+
+		method->Call( &obj, &a, nullptr );
+		EXPECT_EQ( a, 5 );
+	}
+
+	{
+		const auto* method = type.FindMethod( "FooConstRef" );
+		Int32 a = 321;
+		Int32 result = 123;
+		EXPECT_NE( a, result );
+		method->Call( &obj, &a, &result );
+		EXPECT_EQ( a, result );
+	}
+
+	{
+		const auto* method = type.FindMethod( "FooGetRef" );
+		Int32 result = 0;
+		method->Call( &obj, nullptr, &result );
+		EXPECT_EQ( 123, result );
+	}
+}
+
+TEST( TestCaseName, IgnoringConsts )
+{
+	EXPECT_EQ( ::rtti::GetTypeInstanceOf< const Float >(), ::rtti::GetTypeInstanceOf< Float >() );
+	EXPECT_EQ( ::rtti::GetTypeInstanceOf< const rttiTest::StructWithProperties >(), ::rtti::GetTypeInstanceOf< rttiTest::StructWithProperties >() );
+	EXPECT_EQ( ::rtti::GetTypeInstanceOf< Float* >(), ::rtti::GetTypeInstanceOf< Float* const >() );
+	EXPECT_EQ( ::rtti::GetTypeInstanceOf< const std::shared_ptr< Float > >(), ::rtti::GetTypeInstanceOf< std::shared_ptr< Float > >() );
+	EXPECT_EQ( ::rtti::GetTypeInstanceOf< const std::vector< Float > >(), ::rtti::GetTypeInstanceOf< std::vector< Float > >() );
+	EXPECT_EQ( ( ::rtti::GetTypeInstanceOf< const std::pair< Float, Int32 > >() ), ( ::rtti::GetTypeInstanceOf< std::pair< Float, Int32 > >() ) );
+
+	EXPECT_NE( ::rtti::GetTypeInstanceOf< const Float* >(), ::rtti::GetTypeInstanceOf< Float* >() );
+	EXPECT_NE( ( ::rtti::GetTypeInstanceOf< std::shared_ptr< const Float > >() ), ( ::rtti::GetTypeInstanceOf< std::shared_ptr< Float > >() ) );
+	EXPECT_NE( ( ::rtti::GetTypeInstanceOf< std::pair< Float, Int32 > >() ), ( ::rtti::GetTypeInstanceOf< std::pair< const Float, Int32 > >() ) );
 }
