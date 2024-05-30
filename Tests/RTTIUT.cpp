@@ -316,6 +316,7 @@ TEST( TestCaseName, AreNonPrimitiveTypesRegistered )
 	::rtti::Get().VisitTypes( [ & ]( const ::rtti::Type& type )
 		{
 			anyNonPrimitives |= type.GetKind() != rtti::Type::Kind::Primitive;
+			return ::rtti::VisitOutcome::Continue;
 		} );
 
 	EXPECT_TRUE( anyNonPrimitives );
@@ -363,6 +364,7 @@ TEST( TestCaseName, TypesUniqueIDs )
 		{
 			EXPECT_FALSE( ids.contains( type.GetID() ) );
 			ids.emplace( type.GetID() );
+			return ::rtti::VisitOutcome::Continue;
 		} );
 }
 
@@ -497,7 +499,6 @@ TEST( TestCaseName, PropertiesUniqueIDs )
 
 TEST( TestCaseName, PersistentPropertiesIds )
 {
-	const auto& tmp = ::rtti::RTTI::Get();
 	EXPECT_EQ( StructWithPropertiesInherited::GetTypeStatic().FindProperty( "m_firstValue" )->GetID(), 2850178305894955955 );
 	EXPECT_EQ( StructWithPropertiesInherited::GetTypeStatic().FindProperty( "m_boolean" )->GetID(), 95669080446550 );
 }
@@ -878,7 +879,7 @@ namespace rttiTest
 		RTTI_DECLARE_STRUCT( CFoo );
 
 		void FooFunc( Int32 a, Float b, AAA aaa, std::vector< Bool > vec ) {}
-		Int32 FooFunc2() { return 123; }
+		virtual Int32 FooFunc2() { return 123; }
 
 		Int32 FooSum( const Int32 a, Int32 b ){ return a + b; }
 		void FooRef( Int32& ref ) { ++ref; }
@@ -890,6 +891,20 @@ namespace rttiTest
 		Int32& FooGetRef() { static Int32 f = 123; return f; }
 
 		Float m_floatVar = 3.14f;
+	};
+
+	struct CFooChild : public CFoo
+	{
+		RTTI_DECLARE_STRUCT( CFooChild, CFoo );
+		virtual Int32 FooFunc2() override
+		{
+			return 321;
+		}
+
+		Int32 FooFunc3()
+		{
+			return 666;
+		}
 	};
 }
 
@@ -906,10 +921,14 @@ RTTI_IMPLEMENT_TYPE( rttiTest::CFoo,
 	RTTI_REGISTER_METHOD( FooGetRef );
 );
 
+RTTI_IMPLEMENT_TYPE( rttiTest::CFooChild,
+	RTTI_REGISTER_METHOD( FooFunc3 )
+);
+
 TEST( TestCaseName, MethodSignature )
 {
 	std::vector< const rtti::Type* > types;
-	rtti::method_signature< decltype( &CFoo::FooFunc ) >::VisitArgumentTypes( [ & ]( const auto& type, rtti::InstanceFlags flags ) { types.emplace_back( &type ); } );
+	rtti::method_signature< decltype( &CFoo::FooFunc ) >::VisitArgumentTypes( [ & ]( const auto& type, rtti::InstanceFlags flags ) { types.emplace_back( &type ); return ::rtti::VisitOutcome::Continue; } );
 	EXPECT_EQ( types[ 0 ], &rtti::GetTypeInstanceOf< Int32 >() );
 	EXPECT_EQ( types[ 1 ], &rtti::GetTypeInstanceOf< Float >() );
 	EXPECT_EQ( types[ 2 ], &rtti::GetTypeInstanceOf< AAA >() );
@@ -921,9 +940,7 @@ TEST( TestCaseName, MethodSignature )
 TEST( TestCaseName, TypeMethods )
 {
 	const auto& type = rttiTest::CFoo::GetTypeStatic();
-	EXPECT_EQ( type.GetMethodsAmount(), 10 );
-
-	const auto* method = type.GetMethod( 0 );
+	const auto* method = type.FindMethod( "FooFunc" );
 	EXPECT_EQ( method->GetParametersAmount(), 4 );
 
 	EXPECT_EQ( method->GetParametersAmount(), 4 );
@@ -933,8 +950,8 @@ TEST( TestCaseName, TypeMethods )
 	EXPECT_EQ( &method->GetParameterTypeDesc( 3 )->GetType(), &rtti::GetTypeInstanceOf< std::vector< Bool > >() );
 	EXPECT_EQ( method->GetReturnTypeDesc(), nullptr );
 
-	EXPECT_EQ( &type.GetMethod( 1 )->GetReturnTypeDesc()->GetType(), &rtti::GetTypeInstanceOf< Int32 >());
-	EXPECT_EQ( type.GetMethod( 1 )->GetParametersAmount(), 0 );
+	EXPECT_EQ( &type.FindMethod( "FooFunc2" )->GetReturnTypeDesc()->GetType(), &rtti::GetTypeInstanceOf< Int32 >());
+	EXPECT_EQ( type.FindMethod( "FooFunc2" )->GetParametersAmount(), 0);
 
 	EXPECT_TRUE( type.FindMethod( "FooRef" )->GetParameterTypeDesc( 0 )->HasFlags( ::rtti::InstanceFlags::Ref ) );
 	EXPECT_TRUE( type.FindMethod( "FooConstRef" )->GetParameterTypeDesc( 0 )->HasFlags( ::rtti::InstanceFlags::Ref | ::rtti::InstanceFlags::Const ) );
@@ -944,8 +961,8 @@ TEST( TestCaseName, TypeMethods )
 TEST( TestCaseName, FindingMethods )
 {
 	const auto& type = rttiTest::CFoo::GetTypeStatic();
-	EXPECT_EQ( type.GetMethod( 0 ), type.FindMethod( "FooFunc" ) );
-	EXPECT_EQ( type.GetMethod( 1 ), type.FindMethod( "FooFunc2" ) );
+	EXPECT_EQ( type.FindMethod( "FooFunc" ), type.FindMethod( "FooFunc" ) );
+	EXPECT_EQ( type.FindMethod( "FooFunc2" ), type.FindMethod( "FooFunc2" ) );
 }
 
 TEST( TestCaseName, CallingMethods )
@@ -1037,6 +1054,33 @@ TEST( TestCaseName, CallingMethods )
 		Int32 result = 0;
 		method->Call( &obj, nullptr, &result );
 		EXPECT_EQ( 123, result );
+	}
+
+	{
+		{
+			CFooChild childObj;
+			{
+				const auto* method = ::rtti::GetTypeInstanceOf< rttiTest::CFooChild >().FindMethod( "FooFunc2" );
+				Int32 result = 0;
+				method->Call( &childObj, nullptr, &result );
+				EXPECT_EQ( 321, result );
+			}
+			{
+				const auto* method = ::rtti::GetTypeInstanceOf< rttiTest::CFoo >().FindMethod( "FooFunc2" );
+				Int32 result = 0;
+				method->Call( &childObj, nullptr, &result );
+				EXPECT_EQ( 321, result );
+			}
+
+			EXPECT_EQ( ::rtti::GetTypeInstanceOf< rttiTest::CFoo >().FindMethod( "FooFunc3" ), nullptr );
+
+			{
+				const auto* method = ::rtti::GetTypeInstanceOf< rttiTest::CFooChild >().FindMethod( "FooFunc3" );
+				Int32 result = 0;
+				method->Call( &childObj, nullptr, &result );
+				EXPECT_EQ( 666, result );
+			}
+		}
 	}
 }
 

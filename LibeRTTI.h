@@ -98,6 +98,17 @@ namespace rtti
 }
 #pragma endregion
 
+#pragma region VisitOutcome
+namespace rtti
+{
+	enum class VisitOutcome : uint8_t
+	{
+		Break,
+		Continue
+	};
+}
+#pragma endregion
+
 #pragma region InstanceFlags
 namespace rtti
 {
@@ -310,13 +321,25 @@ namespace rtti
 		};
 
 		template< class T >
-		static const rtti::Type* GetTypeInstanceOrNull()
+		static const rtti::Type* TryToGetTypeInstance()
 		{
 			return &rtti::GetTypeInstanceOf< T >();
 		}
 
 		template<>
-		static const rtti::Type* GetTypeInstanceOrNull< void >()
+		static const rtti::Type* TryToGetTypeInstance< void >()
+		{
+			return nullptr;
+		}
+
+		template< class T >
+		static const rtti::Type* TryToGetInstance()
+		{
+			return &T::GetInstance();
+		}
+
+		template<>
+		static const rtti::Type* TryToGetInstance< ::rtti::Type >()
 		{
 			return nullptr;
 		}
@@ -371,7 +394,10 @@ namespace rtti
 		{
 			for ( const auto& typePtr : m_types )
 			{
-				visitFunc( *typePtr );
+				if ( visitFunc( *typePtr ) == ::rtti::VisitOutcome::Break )
+				{
+					break;
+				}
 			}
 		}
 
@@ -617,7 +643,7 @@ namespace rtti
 
 			static const rtti::Type* GetReturnTypeDesc()
 			{
-				return internal::GetTypeInstanceOrNull< std::remove_cvref_t< R > >();
+				return internal::TryToGetTypeInstance< std::remove_cvref_t< R > >();
 			}
 
 			static InstanceFlags GetReturnTypeDescInstanceFlags()
@@ -644,8 +670,10 @@ namespace rtti
 		template< class TFunc >
 		static void VisitArgumentTypes( const TFunc& func )
 		{
-			func( GetTypeInstanceOf< std::remove_cvref_t< TArg > >(), GetInstanceFlags< TArg >() );
-			method_signature< R( TObj::* )( TArgs... ) >::VisitArgumentTypes( func );
+			if ( func( GetTypeInstanceOf< std::remove_cvref_t< TArg > >(), GetInstanceFlags< TArg >() ) == VisitOutcome::Continue )
+			{
+				method_signature< R( TObj::* )( TArgs... ) >::VisitArgumentTypes( func );
+			}
 		}
 	};
 
@@ -663,14 +691,14 @@ namespace rtti
 
 		size_t GetParametersAmount() const
 		{
-			return m_parameterTypes.size();
+			return m_parameterTypeDescs.size();
 		}
 
 		const ParameterTypeDesc* GetParameterTypeDesc( size_t index ) const
 		{
-			if ( index < m_parameterTypes.size() )
+			if ( index < m_parameterTypeDescs.size() )
 			{
-				return &m_parameterTypes[ index ];
+				return &m_parameterTypeDescs[ index ];
 			}
 
 			return nullptr;
@@ -686,24 +714,37 @@ namespace rtti
 			m_func( obj, args, ret );
 		}
 
+		ID GetID() const
+		{
+			return m_id;
+		}
+
 	private:
 		using InternalFuncType = std::function< void( void*, void*, void* ) >;
-		Function( const char* name, std::vector< ParameterTypeDesc > parameterTypes, InternalFuncType func )
+		Function( const char* name, std::vector< ParameterTypeDesc > parameterTypeDescs, InternalFuncType func )
 			: m_name( name )
-			, m_parameterTypes( std::move( parameterTypes ) )
+			, m_parameterTypeDescs( std::move( parameterTypeDescs ) )
 			, m_func( std::move( func ) )
-		{}
+		{
+			for ( const ParameterTypeDesc typeDesc : m_parameterTypeDescs )
+			{
+				m_id = internal::CalcHash( typeDesc.ConstructName().c_str(), m_id );
+			}
 
-		Function( const char* name, const Type& returnType, InstanceFlags returnTypeFlags, std::vector< ParameterTypeDesc > parameterTypes, InternalFuncType func )
-			: Function( name, parameterTypes, func )
+			m_id = internal::CalcHash( m_name, m_id );
+		}
+
+		Function( const char* name, const Type& returnType, InstanceFlags returnTypeFlags, std::vector< ParameterTypeDesc > parameterTypeDescs, InternalFuncType func )
+			: Function( name, parameterTypeDescs, func )
 		{
 			m_returnTypeDesc = std::make_unique< ParameterTypeDesc >( returnType, returnTypeFlags );
 		}
 
-		const char* m_name = nullptr;
-		std::vector< ParameterTypeDesc > m_parameterTypes;
+		std::vector< ParameterTypeDesc > m_parameterTypeDescs;
 		std::unique_ptr< ParameterTypeDesc > m_returnTypeDesc;
+		const char* m_name = nullptr;
 		InternalFuncType m_func;
+		ID m_id;
 	};
 
 
@@ -813,10 +854,7 @@ namespace rtti
 		{ return 0u; }
 
 		virtual size_t GetPropertiesAmount() const { return 0u; }
-		virtual const Property* GetProperty( size_t index ) const { return nullptr; }
-
-		virtual size_t GetMethodsAmount() const { return 0u; }
-		virtual const Function* GetMethod( size_t index ) const { return nullptr; }
+		virtual const ::rtti::Property* GetProperty( size_t index ) const { return nullptr; }
 
 		const Property* FindProperty( size_t wantedId ) const
 		{
@@ -837,9 +875,12 @@ namespace rtti
 			return FindProperty( internal::CalcHash( name ) );
 		}
 
+		virtual size_t GetMethodsAmount() const { return 0u; }
+		virtual const ::rtti::Function* GetMethod( size_t index ) const { return nullptr; }
+
 		const Function* FindMethod( const char* name ) const
 		{
-			for ( size_t i = 0u; i < GetMethodsAmount(); ++i )
+			for ( size_t i = 0; i < GetMethodsAmount(); ++i )
 			{
 				const Function* method = GetMethod( i );
 				if ( strcmp( name, method->GetName() ) == 0 )
@@ -861,12 +902,6 @@ namespace rtti
 		{}
 
 		virtual void OnRegistered() {}
-
-		static size_t GetPropertiesAmountStatic() { return 0u; }
-		static const ::rtti::Property* GetPropertyStatic( size_t index ) { return nullptr; }
-
-		static size_t GetMethodsAmountStatic() { return 0u; }
-		static const ::rtti::Function* GetMethodStatic( size_t index ) { return nullptr; }
 
 		static ::rtti::Property CreateProperty( const char* name, size_t offset, const Type& type, InstanceFlags flags )
 		{
@@ -898,6 +933,7 @@ namespace rtti
 			MethodSignature::VisitArgumentTypes( [ &parameterTypes ]( const Type& type, InstanceFlags flags )
 				{
 					parameterTypes.push_back( { type, flags } );
+					return ::rtti::VisitOutcome::Continue;
 				} );
 
 			auto func = [ nonConstFuncPtr ]( void* obj, void* args, void* ret )
@@ -1030,28 +1066,40 @@ public: \
 			static const Type& s_typeInstance = ::rtti::RTTI::GetMutable().GetOrRegisterType< Type >(); \
 			return s_typeInstance; \
 		} \
-		virtual size_t GetPropertiesAmount() const override { return ParentClassType::GetPropertiesAmountStatic() + m_properties.size(); } \
+		virtual size_t GetPropertiesAmount() const override \
+		{ \
+			const auto* parentTypeInstance = ::rtti::internal::TryToGetInstance< ParentClassType >(); \
+			return (parentTypeInstance ? parentTypeInstance->GetPropertiesAmount() : 0u) + m_properties.size(); \
+		} \
 		virtual const ::rtti::Property* GetProperty( size_t index ) const override \
 		{ \
-			if( index < ParentClassType::GetPropertiesAmountStatic() ) \
+			const auto* parentTypeInstance = ::rtti::internal::TryToGetInstance< ParentClassType >(); \
+			const size_t inheritedPropertiesAmount = parentTypeInstance ? parentTypeInstance->GetPropertiesAmount() : 0; \
+			if( index < inheritedPropertiesAmount ) \
 			{ \
-				return ParentClassType::GetPropertyStatic( index ); \
+				return parentTypeInstance->GetProperty( index ); \
 			} \
 			else \
 			{ \
-				return &m_properties[ index - ParentClassType::GetPropertiesAmountStatic() ]; \
+				return &m_properties[ index - inheritedPropertiesAmount ]; \
 			} \
 		} \
-		virtual size_t GetMethodsAmount() const override { return ParentClassType::GetMethodsAmountStatic() + m_methods.size(); } \
+		virtual size_t GetMethodsAmount() const override \
+		{ \
+			const auto* parentTypeInstance = ::rtti::internal::TryToGetInstance< ParentClassType >(); \
+			return ( parentTypeInstance ? parentTypeInstance->GetMethodsAmount() : 0u ) + m_methods.size(); \
+		} \
 		virtual const ::rtti::Function* GetMethod( size_t index ) const override \
 		{ \
-			if( index < ParentClassType::GetMethodsAmountStatic() ) \
+			const auto* parentTypeInstance = ::rtti::internal::TryToGetInstance< ParentClassType >(); \
+			const size_t inheritedMethodsAmount = parentTypeInstance ? parentTypeInstance->GetMethodsAmount() : 0; \
+			if( index < inheritedMethodsAmount ) \
 			{ \
-				return ParentClassType::GetMethodStatic( index ); \
+				return parentTypeInstance->GetMethod( index ); \
 			} \
 			else \
 			{ \
-				return &m_methods[ index - ParentClassType::GetMethodsAmountStatic() ]; \
+				return &m_methods[ index - inheritedMethodsAmount ]; \
 			} \
 		} \
 	protected: \
@@ -1061,8 +1109,6 @@ public: \
 		} \
 		Type(); \
 		Type( const char* name ) : ParentClassType ( name ) {} \
-		static size_t GetPropertiesAmountStatic() { return GetInstance().GetPropertiesAmount(); } \
-		static const ::rtti::Property* GetPropertyStatic( size_t index ) { return GetInstance().GetProperty( index ); } \
 		virtual void OnRegistered() override; \
 	private: \
 		std::vector< ::rtti::Property > m_properties; \
@@ -1443,7 +1489,7 @@ namespace rtti
 		virtual InternalTypeDesc GetInternalTypeDesc() const = 0;
 		virtual size_t GetElementsAmount( const void* address ) const = 0;
 
-		virtual void VisitElementsAsProperties( const void* containerAddress, const std::function< void( const rtti::Property& ) >& visitFunc ) const = 0;
+		virtual void VisitElementsAsProperties( const void* containerAddress, const std::function< VisitOutcome( const rtti::Property& ) >& visitFunc ) const = 0;
 
 	protected:
 		using Type::Type;
@@ -1479,16 +1525,19 @@ namespace rtti
 				return GetInternalTypeDescStatic();
 			}
 
-			virtual void VisitElementsAsProperties( const void* containerAddress, const std::function< void( const rtti::Property& ) >& visitFunc ) const override
+			virtual void VisitElementsAsProperties( const void* containerAddress, const std::function< VisitOutcome( const rtti::Property& ) >& visitFunc ) const override
 			{
 				size_t i = 0u;
 				for ( const auto& element : *static_cast< const TrueType* >( containerAddress ) )
 				{
 					std::string name = "[";
-					name += std::to_string( i );
+					name += std::to_string( i++ );
 					name += "]";
-					visitFunc( Type::CreateProperty( name.c_str(), reinterpret_cast< const uint8_t* >( &element ) - reinterpret_cast< const uint8_t* >( containerAddress ), GetInternalTypeDesc().GetType(), GetInternalTypeDesc().GetFlags() ) );
-					++i;
+					auto visitOutcome = visitFunc( Type::CreateProperty( name.c_str(), reinterpret_cast< const uint8_t* >( &element ) - reinterpret_cast< const uint8_t* >( containerAddress ), GetInternalTypeDesc().GetType(), GetInternalTypeDesc().GetFlags() ) );
+					if ( visitOutcome == VisitOutcome::Break )
+					{
+						break;
+					}
 				}
 			}
 
@@ -1595,14 +1644,18 @@ namespace rtti
 			return alignof( T );
 		}
 
-		virtual void VisitElementsAsProperties( const void* containerAddress, const std::function< void( const rtti::Property& ) >& visitFunc ) const override
+		virtual void VisitElementsAsProperties( const void* containerAddress, const std::function< VisitOutcome( const rtti::Property& ) >& visitFunc ) const override
 		{
 			for ( size_t i = 0u; i < GetElementsAmount( containerAddress ); ++i )
 			{
 				std::string name = "[";
 				name += std::to_string( i );
 				name += "]";
-				visitFunc( Type::CreateProperty( name.c_str(), i * GetInternalTypeDesc().GetType().GetSize(), GetInternalTypeDesc().GetType(), GetInternalTypeDesc().GetFlags() ) );
+				auto visitOutcome = visitFunc( Type::CreateProperty( name.c_str(), i * GetInternalTypeDesc().GetType().GetSize(), GetInternalTypeDesc().GetType(), GetInternalTypeDesc().GetFlags() ) );
+				if ( visitOutcome == VisitOutcome::Break )
+				{
+					break;
+				}
 			}
 		}
 
@@ -1865,7 +1918,7 @@ namespace rtti
 	class RuntimeType : public type_of< Parent >::type
 	{
 		friend class ::rtti::RTTI;
-		using ParentType = typename type_of< Parent >::type;
+		using ParentClassType = typename type_of< Parent >::type;
 	public:
 		static RuntimeType& Create( std::string name )
 		{
@@ -1879,7 +1932,9 @@ namespace rtti
 
 		const ::rtti::Property& AddProperty( const char* name, const Type& type, InstanceFlags flags )
 		{
-			size_t currentOffset = ParentType::GetSize();
+			const auto* parentTypeInstance = ::rtti::internal::TryToGetTypeInstance< Parent >();
+			size_t parentSize = parentTypeInstance ? parentTypeInstance->GetSize() : 0;
+			size_t currentOffset = parentSize;
 			
 			if ( GetPropertiesAmount() > 0u )
 			{
@@ -1889,7 +1944,7 @@ namespace rtti
 			}
 
 			m_properties.emplace_back( ::rtti::Type::CreateProperty( name, currentOffset, type, flags ) );
-			m_size = currentOffset - ParentType::GetSize() + type.GetSize();
+			m_size = currentOffset - parentSize + type.GetSize();
 			m_alignment = std::max( m_alignment, type.GetAlignment() );
 			return m_properties.back();
 		}
@@ -1912,7 +1967,11 @@ namespace rtti
 
 		virtual void ConstructInPlace( void* dest ) const override
 		{
-			ParentType::ConstructInPlace( dest );
+			if ( const auto* parentTypeInstance = ::rtti::internal::TryToGetTypeInstance< Parent >() )
+			{
+				parentTypeInstance->ConstructInPlace( dest );
+			}
+
 			for ( const auto& property : m_properties )
 			{
 				const auto& type = property.GetType();
@@ -1923,7 +1982,11 @@ namespace rtti
 #if RTTI_REQUIRE_MOVE_CTOR
 		virtual void MoveInPlace( void* dest, void* src ) const override
 		{
-			ParentType::MoveInPlace( dest, src );
+			if ( const auto* parentTypeInstance = ::rtti::internal::TryToGetTypeInstance< Parent >() )
+			{
+				parentTypeInstance->MoveInPlace( dest, src );
+			}
+
 			for ( const auto& property : m_properties )
 			{
 				const auto& type = property.GetType();
@@ -1934,7 +1997,11 @@ namespace rtti
 
 		virtual void Destroy( void* address ) const override
 		{
-			ParentType::Destroy( address );
+			if ( const auto* parentTypeInstance = ::rtti::internal::TryToGetTypeInstance< Parent >() )
+			{
+				parentTypeInstance->Destroy( address );
+			}
+
 			for ( const auto& property : m_properties )
 			{
 				const auto& type = property.GetType();
@@ -1952,17 +2019,23 @@ namespace rtti
 			return m_alignment;
 		}
 
-		virtual size_t GetPropertiesAmount() const override { return ParentType::GetPropertiesAmountStatic() + m_properties.size(); }
+		virtual size_t GetPropertiesAmount() const override 
+		{ 
+			const auto* parentTypeInstance = ::rtti::internal::TryToGetTypeInstance< Parent >();
+			return (parentTypeInstance ? parentTypeInstance->GetPropertiesAmount() : 0) + m_properties.size(); 
+		}
 		virtual const ::rtti::Property* GetProperty( size_t index ) const override
 		{
-			if ( index < ParentType::GetPropertiesAmountStatic() )
+			const auto* parentTypeInstance = ::rtti::internal::TryToGetTypeInstance< Parent >();
+			const size_t inheritedPropertiesAmount =  parentTypeInstance ? parentTypeInstance->GetPropertiesAmount() : 0;
+			if ( index < inheritedPropertiesAmount )
 			{
-				return ParentType::GetPropertyStatic( index );
+				return parentTypeInstance->GetProperty( index );
 			}
 			
-			if ( index - ParentType::GetPropertiesAmountStatic() < m_properties.size() )
+			if ( index - inheritedPropertiesAmount < m_properties.size() )
 			{
-				return &m_properties[ index - ParentType::GetPropertiesAmountStatic() ];
+				return &m_properties[ index - inheritedPropertiesAmount ];
 			}
 
 			return nullptr;
@@ -1970,14 +2043,20 @@ namespace rtti
 
 	private:
 		RuntimeType( std::string name )
-			: ParentType( name.c_str() )
+			: ParentClassType( name.c_str() )
 			, m_name( std::move( name ) )
-		{}
+		{
+			if ( const auto* parentTypeInstance = ::rtti::internal::TryToGetTypeInstance< Parent >() )
+			{
+				m_size = parentTypeInstance->GetSize();
+				m_alignment = parentTypeInstance->GetAlignment();
+			}	
+		}
 
 		std::string m_name;
 		std::vector< ::rtti::Property > m_properties;
-		size_t m_size = ParentType::GetSize();
-		size_t m_alignment = ParentType::GetAlignment();
+		size_t m_size = 0;
+		size_t m_alignment =  0;
 	};
 }
 #pragma endregion
