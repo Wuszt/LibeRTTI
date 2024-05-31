@@ -1097,3 +1097,34 @@ TEST( TestCaseName, IgnoringConsts )
 	EXPECT_NE( ( ::rtti::GetTypeInstanceOf< std::shared_ptr< const Float > >() ), ( ::rtti::GetTypeInstanceOf< std::shared_ptr< Float > >() ) );
 	EXPECT_NE( ( ::rtti::GetTypeInstanceOf< std::pair< Float, Int32 > >() ), ( ::rtti::GetTypeInstanceOf< std::pair< const Float, Int32 > >() ) );
 }
+
+namespace rttiTest
+{
+	struct StructWithDuplications
+	{
+		RTTI_DECLARE_STRUCT( StructWithDuplications );
+
+		Bool m_tmp = false;
+		void Foo() {}
+	};
+}
+
+RTTI_IMPLEMENT_TYPE( rttiTest::StructWithDuplications,
+	RTTI_REGISTER_PROPERTY( m_tmp );
+	RTTI_REGISTER_PROPERTY( m_tmp );
+	RTTI_REGISTER_PROPERTY( m_tmp );
+	RTTI_REGISTER_PROPERTY( m_tmp );
+	RTTI_REGISTER_PROPERTY( m_tmp );
+	RTTI_REGISTER_PROPERTY( m_tmp );
+
+	RTTI_REGISTER_METHOD( Foo );
+	RTTI_REGISTER_METHOD( Foo );
+	RTTI_REGISTER_METHOD( Foo );
+	RTTI_REGISTER_METHOD( Foo );
+);
+
+TEST( TestCaseName, IgnoreDuplicates )
+{
+	EXPECT_EQ( rttiTest::StructWithDuplications::Type::GetInstance().GetPropertiesAmount(), 1 );
+	EXPECT_EQ( rttiTest::StructWithDuplications::Type::GetInstance().GetMethodsAmount(), 1 );
+}

@@ -563,7 +563,7 @@ namespace rtti
 	};
 }
 
-#define RTTI_REGISTER_PROPERTY( PropertyName ) m_properties.emplace_back( CreateProperty< decltype( CurrentlyImplementedType::##PropertyName ) >( #PropertyName, offsetof( CurrentlyImplementedType, PropertyName ) ) );
+#define RTTI_REGISTER_PROPERTY( PropertyName ) TryToAddProperty( CreateProperty< decltype( CurrentlyImplementedType::##PropertyName ) >( #PropertyName, offsetof( CurrentlyImplementedType, PropertyName ) ) );
 #pragma endregion
 
 #pragma region InternalTypeDesc
@@ -744,11 +744,11 @@ namespace rtti
 		std::unique_ptr< ParameterTypeDesc > m_returnTypeDesc;
 		const char* m_name = nullptr;
 		InternalFuncType m_func;
-		ID m_id;
+		ID m_id = 0u;
 	};
 
 
-#define RTTI_REGISTER_METHOD( MethodName ) m_methods.emplace_back( CreateFunction( #MethodName , &##CurrentlyImplementedType::##MethodName ) );
+#define RTTI_REGISTER_METHOD( MethodName ) TryToAddMethod( CreateFunction( #MethodName , &##CurrentlyImplementedType::##MethodName ) );
 }
 #pragma endregion
 
@@ -856,7 +856,7 @@ namespace rtti
 		virtual size_t GetPropertiesAmount() const { return 0u; }
 		virtual const ::rtti::Property* GetProperty( size_t index ) const { return nullptr; }
 
-		const Property* FindProperty( size_t wantedId ) const
+		const Property* FindProperty( ID wantedId ) const
 		{
 			for ( size_t i = 0u; i < GetPropertiesAmount(); ++i )
 			{
@@ -1111,6 +1111,25 @@ public: \
 		Type( const char* name ) : ParentClassType ( name ) {} \
 		virtual void OnRegistered() override; \
 	private: \
+		void TryToAddProperty( ::rtti::Property&& prop ) \
+		{ \
+			if ( !FindProperty( prop.GetID() ) ) \
+			{ \
+				m_properties.emplace_back( std::move( prop ) ); \
+			} \
+		} \
+		void TryToAddMethod( ::rtti::Function&& func ) \
+		{ \
+			for ( size_t i = 0; i < GetMethodsAmount(); ++i ) \
+			{ \
+				const ::rtti::Function* method = GetMethod( i ); \
+				if ( method->GetID() == func.GetID() ) \
+				{ \
+					return; \
+				} \
+			} \
+			m_methods.emplace_back( std::move( func ) ); \
+		} \
 		std::vector< ::rtti::Property > m_properties; \
 		std::vector< ::rtti::Function > m_methods; \
 	}; \
