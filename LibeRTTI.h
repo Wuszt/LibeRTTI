@@ -89,6 +89,7 @@ namespace rtti
 	template< class T > class PrimitiveType;
 	template< class T > class SharedPtrType;
 	template< class T > class UniquePtrType;
+	template< class T > class RuntimeType;
 	using ID = uint64;
 
 	namespace internal
@@ -1933,25 +1934,87 @@ RTTI_DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( __int8 )
 #pragma region RuntimeType
 namespace rtti
 {
-	template< class Parent = void >
-	class RuntimeType : public type_of< Parent >::type
+	namespace internal
 	{
-		friend class ::rtti::RTTI;
-		using ParentClassType = typename type_of< Parent >::type;
-	public:
-		static RuntimeType& Create( std::string name )
+		template< class TType >
+		TType& CreateType( std::string name )
 		{
 			if ( ::rtti::Get().FindType( name.c_str() ) )
 			{
 				throw; // Type with this name already exists
 			}
 
-			return ::rtti::RTTI::GetMutable().GetOrRegisterType< RuntimeType >( std::move( name ) );
+			return ::rtti::RTTI::GetMutable().GetOrRegisterType< TType >( std::move( name ) );
 		}
 
+		template< class TParentClass >
+		struct RuntimeTypeHelperCommon
+		{
+			const TParentClass* GetParentTypeInstance() const
+			{
+				return m_parentType;
+			}
+
+		protected:
+			using TType = RuntimeType< TParentClass >;
+			static TType& CreateInternal( std::string name, const TParentClass& parentType )
+			{
+				TType& type = CreateType< TType >( std::move( name ) );
+				type.RuntimeTypeHelperCommon< TParentClass >::m_parentType = &parentType;
+				return type;
+			}
+
+		private:
+			const TParentClass* m_parentType = nullptr;
+		};
+
+		template< class TParentClass >
+		struct RuntimeTypeHelper : public RuntimeTypeHelperCommon< TParentClass >
+		{
+			using TType = RuntimeType< TParentClass >;
+			static TType& Create( std::string name )
+			{
+				return RuntimeTypeHelperCommon< TParentClass >::CreateInternal( std::move( name ), TParentClass::Type::GetInstance() );
+			}
+		};
+
+		template< class T >
+		struct RuntimeTypeHelper< RuntimeType< T > > : public RuntimeTypeHelperCommon< RuntimeType< T > >
+		{
+			using TType = RuntimeType< RuntimeType< T > >;
+			static TType& Create( std::string name, const RuntimeType< T >& parentType )
+			{
+				return RuntimeTypeHelperCommon< RuntimeType< T > >::CreateInternal( std::move( name ), parentType );
+			}
+		};
+
+		template<>
+		struct RuntimeTypeHelper< rtti::Type >
+		{
+			using TType = RuntimeType< rtti::Type >;
+
+			static TType& Create( std::string name )
+			{
+				return CreateType< TType >( std::move( name ) );
+			}
+
+			const ::rtti::Type* GetParentTypeInstance() const
+			{
+				return nullptr;
+			}
+		};
+	}
+
+	template< class ParentClassType = rtti::Type >
+	class RuntimeType : public ParentClassType, public internal::RuntimeTypeHelper< ParentClassType >
+	{
+		friend class ::rtti::RTTI;
+		using internal::RuntimeTypeHelper< ParentClassType >::GetParentTypeInstance;
+	public:
+		using internal::RuntimeTypeHelper< ParentClassType >::Create;
 		const ::rtti::Property& AddProperty( const char* name, const Type& type, InstanceFlags flags )
 		{
-			const auto* parentTypeInstance = ::rtti::internal::TryToGetTypeInstance< Parent >();
+			const auto* parentTypeInstance = GetParentTypeInstance();
 			size_t parentSize = parentTypeInstance ? parentTypeInstance->GetSize() : 0;
 			size_t currentOffset = parentSize;
 			
@@ -1986,7 +2049,7 @@ namespace rtti
 
 		virtual void ConstructInPlace( void* dest ) const override
 		{
-			if ( const auto* parentTypeInstance = ::rtti::internal::TryToGetTypeInstance< Parent >() )
+			if ( const auto* parentTypeInstance = GetParentTypeInstance() )
 			{
 				parentTypeInstance->ConstructInPlace( dest );
 			}
@@ -2001,7 +2064,7 @@ namespace rtti
 #if RTTI_REQUIRE_MOVE_CTOR
 		virtual void MoveInPlace( void* dest, void* src ) const override
 		{
-			if ( const auto* parentTypeInstance = ::rtti::internal::TryToGetTypeInstance< Parent >() )
+			if ( const auto* parentTypeInstance = GetParentTypeInstance() )
 			{
 				parentTypeInstance->MoveInPlace( dest, src );
 			}
@@ -2016,7 +2079,7 @@ namespace rtti
 
 		virtual void Destroy( void* address ) const override
 		{
-			if ( const auto* parentTypeInstance = ::rtti::internal::TryToGetTypeInstance< Parent >() )
+			if ( const auto* parentTypeInstance = GetParentTypeInstance() )
 			{
 				parentTypeInstance->Destroy( address );
 			}
@@ -2040,12 +2103,12 @@ namespace rtti
 
 		virtual size_t GetPropertiesAmount() const override 
 		{ 
-			const auto* parentTypeInstance = ::rtti::internal::TryToGetTypeInstance< Parent >();
+			const auto* parentTypeInstance = GetParentTypeInstance();
 			return (parentTypeInstance ? parentTypeInstance->GetPropertiesAmount() : 0) + m_properties.size(); 
 		}
 		virtual const ::rtti::Property* GetProperty( size_t index ) const override
 		{
-			const auto* parentTypeInstance = ::rtti::internal::TryToGetTypeInstance< Parent >();
+			const auto* parentTypeInstance = GetParentTypeInstance();
 			const size_t inheritedPropertiesAmount =  parentTypeInstance ? parentTypeInstance->GetPropertiesAmount() : 0;
 			if ( index < inheritedPropertiesAmount )
 			{
@@ -2060,18 +2123,19 @@ namespace rtti
 			return nullptr;
 		}
 
-	private:
+	protected:
 		RuntimeType( std::string name )
 			: ParentClassType( name.c_str() )
 			, m_name( std::move( name ) )
 		{
-			if ( const auto* parentTypeInstance = ::rtti::internal::TryToGetTypeInstance< Parent >() )
+			if ( const auto* parentTypeInstance = GetParentTypeInstance() )
 			{
 				m_size = parentTypeInstance->GetSize();
 				m_alignment = parentTypeInstance->GetAlignment();
 			}	
 		}
 
+	private:
 		std::string m_name;
 		std::vector< ::rtti::Property > m_properties;
 		size_t m_size = 0;

@@ -835,7 +835,7 @@ TEST( TestCaseName, RuntimeTypePropertiesWithAllignment )
 	}
 
 	{
-		auto& testType = ::rtti::RuntimeType< SomeStruct >::Create( "RuntimeTypePropertiesWithAllignment1" );
+		auto& testType = ::rtti::RuntimeType< SomeStruct::Type >::Create( "RuntimeTypePropertiesWithAllignment1" );
 		TestRuntimeType( testType );
 	}
 }
@@ -1127,4 +1127,39 @@ TEST( TestCaseName, IgnoreDuplicates )
 {
 	EXPECT_EQ( rttiTest::StructWithDuplications::Type::GetInstance().GetPropertiesAmount(), 1 );
 	EXPECT_EQ( rttiTest::StructWithDuplications::Type::GetInstance().GetMethodsAmount(), 1 );
+}
+
+namespace rttiTest
+{
+	struct StructWithSingleProperty
+	{
+		RTTI_DECLARE_STRUCT( StructWithSingleProperty );
+		Int32 m_int = 0;
+	};
+}
+
+RTTI_IMPLEMENT_TYPE( rttiTest::StructWithSingleProperty,
+	RTTI_REGISTER_PROPERTY( m_int );
+);
+
+TEST( TestCaseName, RuntimeTypesHierarchy )
+{
+	using BaseType = rttiTest::StructWithSingleProperty::Type;
+	const auto& baseType = BaseType::GetInstance();
+
+	using R0 = ::rtti::RuntimeType< BaseType >;
+	auto& r0 = R0::Create( "r0" );
+	auto f0 = []( const BaseType& type ){ EXPECT_TRUE( type.FindProperty( "m_int" ) ); };
+	f0( r0 );
+
+	using R1 = ::rtti::RuntimeType< R0 >;
+	auto& r1 = R1::Create("r1", r0);
+	auto f1 = []( const R0& type ) { EXPECT_TRUE( type.FindProperty( "m_int" ) ); };
+	f0( r1 );
+	f1( r1 );
+
+	r0.AddProperty< Float >( "m_float" );
+	EXPECT_FALSE( baseType.FindProperty( "m_float" ) );
+	EXPECT_TRUE( r0.FindProperty( "m_float" ) );
+	EXPECT_TRUE( r1.FindProperty( "m_float" ) );
 }
