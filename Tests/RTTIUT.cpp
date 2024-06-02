@@ -376,6 +376,15 @@ TEST( TestCaseName, PersistentTypesIds )
 
 namespace rttiTest
 {
+	enum class TestEnum : Int32
+	{
+		MinusFive = -5,
+		One = 1,
+		Seven = 7,
+		MinusTen = -10,
+		Zero = 0,
+	};
+
 	struct StructWithProperties
 	{
 		RTTI_DECLARE_STRUCT( StructWithProperties );
@@ -401,6 +410,7 @@ namespace rttiTest
 		std::unordered_map< Float, const Bool > m_map;
 		std::shared_ptr< Float > m_sharedPtr;
 		std::unique_ptr< Float > m_uniquePtr;
+		TestEnum m_enum = TestEnum::Zero;
 	};
 
 	struct StructWithPropertiesInherited : public StructWithProperties
@@ -409,6 +419,14 @@ namespace rttiTest
 		Bool m_boolean = false;
 	};
 }
+
+RTTI_DECLARE_AND_IMPLEMENT_ENUM( rttiTest::TestEnum,
+	RTTI_REGISTER_ENUM_MEMBER( MinusFive );
+	RTTI_REGISTER_ENUM_MEMBER( One );
+	RTTI_REGISTER_ENUM_MEMBER( Seven );
+	RTTI_REGISTER_ENUM_MEMBER( MinusTen );
+	RTTI_REGISTER_ENUM_MEMBER( Zero );
+);
 
 RTTI_IMPLEMENT_TYPE( rttiTest::StructWithProperties,
 	RTTI_REGISTER_PROPERTY( m_firstValue );
@@ -432,6 +450,7 @@ RTTI_IMPLEMENT_TYPE( rttiTest::StructWithProperties,
 	RTTI_REGISTER_PROPERTY( m_map );
 	RTTI_REGISTER_PROPERTY( m_sharedPtr );
 	RTTI_REGISTER_PROPERTY( m_uniquePtr );
+	RTTI_REGISTER_PROPERTY( m_enum );
 )
 
 RTTI_IMPLEMENT_TYPE( rttiTest::StructWithPropertiesInherited,
@@ -1162,4 +1181,30 @@ TEST( TestCaseName, RuntimeTypesHierarchy )
 	EXPECT_FALSE( baseType.FindProperty( "m_float" ) );
 	EXPECT_TRUE( r0.FindProperty( "m_float" ) );
 	EXPECT_TRUE( r1.FindProperty( "m_float" ) );
+}
+
+TEST( TestCaseName, Enum )
+{
+	const auto& enumType = rtti::GetTypeInstanceOf< rttiTest::TestEnum >();
+	EXPECT_TRUE( strcmp( enumType.GetName(), "rttiTest::TestEnum" ) == 0 );
+	EXPECT_EQ( enumType.GetUnderlyingType(), rtti::GetTypeInstanceOf< Int32 >() );
+
+	EXPECT_TRUE( strcmp( enumType.GetValueName( rttiTest::TestEnum::MinusFive ), "MinusFive" ) == 0 );
+	EXPECT_TRUE( strcmp( enumType.GetValueName( rttiTest::TestEnum::One ), "One" ) == 0 );
+	EXPECT_TRUE( strcmp( enumType.GetValueName( rttiTest::TestEnum::Seven ), "Seven" ) == 0 );
+	EXPECT_TRUE( strcmp( enumType.GetValueName( rttiTest::TestEnum::Zero ), "Zero" ) == 0 );
+	EXPECT_TRUE( strcmp( enumType.GetValueName( rttiTest::TestEnum::MinusTen ), "MinusTen" ) == 0 );
+
+	auto testValueFromName = [ & ]( const char* name, rttiTest::TestEnum value )
+		{
+			rttiTest::TestEnum outcome = TestEnum::Zero;
+			EXPECT_TRUE( enumType.GetValueFromName( name, outcome ) );
+			EXPECT_EQ( value, outcome );
+		};
+
+	testValueFromName( "MinusFive", rttiTest::TestEnum::MinusFive );
+	testValueFromName( "One", rttiTest::TestEnum::One );
+	testValueFromName( "Seven", rttiTest::TestEnum::Seven );
+	testValueFromName( "Zero", rttiTest::TestEnum::Zero );
+	testValueFromName( "MinusTen", rttiTest::TestEnum::MinusTen );
 }

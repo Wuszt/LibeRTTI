@@ -90,6 +90,7 @@ namespace rtti
 	template< class T > class SharedPtrType;
 	template< class T > class UniquePtrType;
 	template< class T > class RuntimeType;
+	template< class T > class EnumType;
 	using ID = uint64;
 
 	namespace internal
@@ -239,6 +240,9 @@ namespace rtti
 
 	template< class T >
 	struct type_of< T, std::enable_if_t< std::is_same_v< T, void > > >{ using type = Type; };
+
+	template< class T >
+	struct type_of< T, std::enable_if_t< std::is_enum_v< T > > > { using type = EnumType< std::remove_cvref_t< T > >; };
 
 	template< class T >
 	struct type_of< T, std::enable_if_t< std::is_class_v< T > && !internal::is_template< T >::value && !internal::is_array< T >::value > > { using type = typename T::Type; };
@@ -772,6 +776,7 @@ namespace rtti
 			Set,
 			Map,
 			RuntimeType,
+			Enum,
 		};
 
 		Type() = delete;
@@ -1902,7 +1907,7 @@ namespace rtti
 			return s_typeInstance;
 		}
 
-	private:
+	protected:
 		PrimitiveType< T >() : rtti::Type( GetName() ) {}
 	};
 }
@@ -1912,11 +1917,6 @@ template<> \
 inline const char* ::rtti::PrimitiveType< type >::GetName() const \
 { \
 	return #type; \
-} \
-template<> \
-inline bool rtti::Type::IsA< type >() const \
-{ \
-	return *this == ::rtti::PrimitiveType< type >::GetInstance(); \
 } \
 RTTI_INTERNAL_REGISTER_TYPE( ::rtti::PrimitiveType<##type##> )
 
@@ -1929,6 +1929,172 @@ RTTI_DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( unsigned )
 RTTI_DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( unsigned long long )
 RTTI_DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( double )
 RTTI_DECLARE_AND_IMPLEMENT_PRIMITIVE_TYPE( __int8 )
+#pragma endregion
+
+#pragma region Enums
+namespace rtti
+{
+	class EnumTypeBase : public Type
+	{
+	public:
+		virtual Kind GetKind() const override { return Kind::Enum; }
+
+		using ValueType = unsigned long long;
+		struct MemberDesc
+		{
+			ValueType m_value = 0;
+			const char* m_name = nullptr;
+		};
+
+		template< class TFunc >
+		void VisitMembers( const TFunc& func ) const
+		{
+			for ( const MemberDesc& member : m_members )
+			{
+				if ( func( member ) == VisitOutcome::Break )
+				{
+					break;
+				}
+			}
+		}
+
+		const MemberDesc* GetCurrentMember( const void* address ) const
+		{
+			return GetMemberForValue( GetCurrentValue( address ) );
+		}
+
+		virtual void SetCurrentMember( void* address, const MemberDesc& member ) const = 0;
+
+	protected:
+		virtual ValueType GetCurrentValue( const void* address ) const = 0;
+
+		template< class T >
+		const MemberDesc* GetMemberForValue( T value ) const
+		{
+			auto it = std::find_if( m_members.begin(), m_members.end(), [ & ]( MemberDesc member ) { return member.m_value == static_cast< ValueType >( value ); } );
+			if ( it != m_members.end() )
+			{
+				return &*it;
+			}
+
+			return nullptr;
+		}
+
+		const ValueType* GetValueFromName( const char* name ) const
+		{
+			auto it = std::find_if( m_members.begin(), m_members.end(), [ & ]( MemberDesc member ) { return strcmp( member.m_name, name ) == 0; } );
+			if ( it != m_members.end() )
+			{
+				return &it->m_value;
+			}
+
+			return nullptr;
+		}
+
+		using Type::Type;
+		std::vector< MemberDesc > m_members;
+	};
+
+	template< class T >
+	class EnumTypeOfUnderlyingType : public EnumTypeBase
+	{
+	public:
+		using UnderlyingClassType = PrimitiveType< T >;
+
+		virtual ValueType GetCurrentValue( const void* address ) const override
+		{
+			return static_cast< ValueType >( *reinterpret_cast< const T* >( address ) );
+		}
+
+		virtual void SetCurrentMember( void* address, const MemberDesc& member ) const override
+		{
+			*reinterpret_cast< T* >( address ) = static_cast< T >( member.m_value );
+		}
+
+		virtual void ConstructInPlace( void* dest ) const
+		{
+			new ( dest ) T();
+		}
+
+#if RTTI_REQUIRE_MOVE_CTOR
+		virtual void MoveInPlace( void* dest, void* src ) const
+		{
+			std::memcpy( dest, src, sizeof( T ) );
+		}
+#endif
+		virtual void Destroy( void* address ) const override {}
+
+		virtual size_t GetSize() const override { return sizeof( T ); }
+
+		virtual size_t GetAlignment() const override { return alignof( T ); }
+
+		const UnderlyingClassType& GetUnderlyingType() const
+		{
+			return UnderlyingClassType::GetInstance();
+		}
+
+	protected:
+		using EnumTypeBase::EnumTypeBase;
+	};
+
+	template< class T >
+	class EnumType : public EnumTypeOfUnderlyingType< std::underlying_type_t < T > >
+	{
+		friend class ::rtti::RTTI;
+		using UnderlyingType = std::underlying_type_t< T >;
+	public:
+
+		virtual const char* GetName() const;
+		
+		static const rtti::EnumType< T >& GetInstance()
+		{
+			static const rtti::EnumType< T >& s_typeInstance = ::rtti::RTTI::GetMutable().GetOrRegisterType< rtti::EnumType< T > >();
+			return s_typeInstance;
+		}
+
+		const char* GetValueName( T value ) const
+		{
+			if ( const EnumTypeBase::MemberDesc* member = EnumTypeBase::GetMemberForValue( value ) )
+			{
+				return member->m_name;
+			}
+
+			return nullptr;
+		}
+
+		bool GetValueFromName( const char* name, T& outValue ) const
+		{
+			if ( const EnumTypeBase::ValueType* value = EnumTypeOfUnderlyingType< UnderlyingType >::GetValueFromName( name ) )
+			{
+				outValue = static_cast< T >( *value );
+				return true;
+			}
+
+			return false;
+		}
+
+	private:
+		EnumType< T >() : EnumTypeOfUnderlyingType< std::underlying_type_t < T > >( GetName() ) {}
+
+		virtual void OnRegistered() override;
+	};
+}
+
+#define RTTI_DECLARE_AND_IMPLEMENT_ENUM( type, ... ) \
+template<> \
+inline const char* ::rtti::EnumType< type >::GetName() const \
+{ \
+	return #type; \
+} \
+void ::rtti::EnumType< type >::OnRegistered() \
+{ \
+	using CurrentType = type##; \
+	using CurrentlyImplementedType = ::rtti::EnumType<##type##>; \
+	__VA_ARGS__ \
+} \
+RTTI_INTERNAL_REGISTER_TYPE( ::rtti::EnumType<##type##> )
+
+#define RTTI_REGISTER_ENUM_MEMBER( Member ) m_members.push_back( { static_cast< EnumTypeBase::ValueType >( CurrentType::##Member ) , #Member } );
 #pragma endregion
 
 #pragma region RuntimeType
