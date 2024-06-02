@@ -22,6 +22,7 @@ LibeRTTI is a header only and dependency-free library which provides type data f
 | **Properties and Methods** | Types might keep data about the their member variables and methods to make them accessible in runtime. |
 | **Unique and persistent IDs** | All registered types and their properties get unique IDs which persist between executions unless the name of the type/property changes. |
 | **Primitive Types** | All primitive types are registered out of the box. |
+| **Enums** | Custom enum classes can also be registered. |
 | **Pointer Types** | Pointer types are registered lazily at runtime when the need for them arrises. You're not limited by the amount of indirections (properties like `float*****` are allowed). Pointer types follow their original classes hierarchy. I.e `PointerType<B>` inherits from `PointerType<A>` if `B` also inherits from `A`. |
 | **Runtime Types** | You can compose completely new type with selected properties in runtime. Such types can still inherit from other types and preserve hierarchy of classes.
 | **std:: <br /> shared_ptr <br /> unique_ptr <br /> vector <br />unordered_set <br />unordered_map <br />pair <br /> Types (Optional)** | All these types are registered out of the box and might be disabled using config defines: <br />`RTTI_CFG_CREATE_STD_SHAREDPTR_TYPE 0`, <br />`RTTI_CFG_CREATE_STD_UNIQUEPTR_TYPE 0`, <br /> `RTTI_CFG_CREATE_STD_VECTOR_TYPE 0`, <br /> `RTTI_CFG_CREATE_STD_SET_TYPE 0`,<br /> `RTTI_CFG_CREATE_STD_MAP_TYPE 0`,<br /> `RTTI_CFG_CREATE_STD_PAIR_TYPE 0` <br />  &#8205;  |
@@ -97,16 +98,30 @@ Put one of the following macros into your type's body.
 |                            |        |
 | Struct |  <pre lang=cpp> RTTI_DECLARE_STRUCT( <struct_name>, <parent_name_with_namespace> (optional) ) </pre>
 ## 2. Implement type
+### Structs and Classes
 Put the following macro in .cpp file.
 ```cpp
-RTTI_IMPLEMENT_TYPE( <class_name_with_namespace>, <properties_registration_macros>... (optional> )
+RTTI_IMPLEMENT_TYPE( <class_name_with_namespace>, <properties_and_methods_registration_macros... (optional)> );
 ```
 To register property of your type use:
 ```cpp
-RTTI_REGISTER_PROPERTY( <property_name> )
+RTTI_REGISTER_PROPERTY( <property_name> );
 ```
 For methods use:
 ```cpp
-RTTI_REGISTER_METHOD( <method_name> )
+RTTI_REGISTER_METHOD( <method_name> );
 ```
 and put it in `RTTI_IMPLEMENT_TYPE` macro.
+
+---
+
+### Enums
+To register your custom enum put the following macro in .cpp file.
+```cpp
+RTTI_DECLARE_AND_IMPLEMENT_ENUM( <enum_name_with_namespace>, <enum_members...> )
+```
+To register enum's members use:
+```cpp
+RTTI_REGISTER_ENUM_MEMBER( <member_name> );
+```
+and put it in `RTTI_DECLARE_AND_IMPLEMENT_ENUM` macro.
