@@ -1,6 +1,8 @@
 #include "RTTIUTClasses.h"
 
 RTTI_IMPLEMENT_TYPE( rttiTest::A )
+RTTI_IMPLEMENT_TYPE( rttiTest::A::NestedClass );
+
 RTTI_IMPLEMENT_TYPE( rttiTest::AA )
 RTTI_IMPLEMENT_TYPE( rttiTest::AAA )
 RTTI_IMPLEMENT_TYPE( rttiTest::B )

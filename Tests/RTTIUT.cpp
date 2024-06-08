@@ -26,6 +26,7 @@ TEST( TestCaseName, TypeNameAsString )
 	c::C c_c;
 
 	EXPECT_TRUE( strcmp( A::GetTypeStatic().GetName(), "rttiTest::A" ) == 0 );
+	EXPECT_TRUE( strcmp( A::NestedClass::GetTypeStatic().GetName(), "rttiTest::A::NestedClass" ) == 0 );
 	EXPECT_TRUE( strcmp( AA::GetTypeStatic().GetName(), "rttiTest::AA" ) == 0 );
 	EXPECT_TRUE( strcmp( B::GetTypeStatic().GetName(), "rttiTest::B" ) == 0 );
 	EXPECT_TRUE( strcmp( c::C::GetTypeStatic().GetName(), "rttiTest::c::C" ) == 0 );
@@ -84,6 +85,8 @@ TEST( TestCaseName, IsA )
 
 	const B::Type& bTypeClass = BB::GetTypeStatic();
 	EXPECT_TRUE( bTypeClass.IsA< BB >() );
+
+	EXPECT_TRUE( A::NestedClass().IsA< A::NestedClass >() );
 }
 
 TEST( TestCaseName, InheritsFrom )

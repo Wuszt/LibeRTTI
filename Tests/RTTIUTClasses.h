@@ -7,6 +7,12 @@ namespace rttiTest
 	class A
 	{
 		RTTI_DECLARE_POLYMORPHIC_CLASS( A )
+
+	public:
+		class NestedClass
+		{
+			RTTI_DECLARE_CLASS( NestedClass );
+		};
 	};
 
 	static_assert( sizeof( A ) == 8u );
