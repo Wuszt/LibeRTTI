@@ -551,6 +551,11 @@ namespace rtti
 			return ( flags & m_instanceFlags ) == flags;
 		}
 
+		InstanceFlags GetFlags() const
+		{
+			return m_instanceFlags;
+		}
+
 	private:
 		Property( const char* name, size_t offset, const Type& type, InstanceFlags flags )
 			: m_name( name )

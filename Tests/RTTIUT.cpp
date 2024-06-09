@@ -711,6 +711,12 @@ TEST( TestCaseName, Pointers )
 	testFunc( "m_primitiveTypePtr", "float" );
 	testFunc( "m_userTypePtr", rttiTest::A::GetTypeStatic().GetName() );
 	testFunc( "m_pointerToOwnerType", rttiTest::StructWithProperties::GetTypeStatic().GetName() );
+
+	auto func = []( const rtti::PointerType< rttiTest::A >& type, const char* expectedName ) { EXPECT_TRUE( strcmp( type.GetName(), expectedName ) == 0 ); };
+
+	func( rtti::PointerType< rttiTest::A >::GetInstance(), "rttiTest::A*" );
+	func( rtti::PointerType< rttiTest::AA >::GetInstance(), "rttiTest::AA*" );
+	func( rtti::PointerType< rttiTest::AAA >::GetInstance(), "rttiTest::AAA*" );
 }
 
 static void TestContainer( const ::rtti::ContainerType* containerType )
