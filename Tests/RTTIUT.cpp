@@ -70,7 +70,7 @@ TEST( TestCaseName, IsA )
 	const A::Type& aTypeClass = AA::GetTypeStatic();
 	EXPECT_TRUE( aTypeClass.IsA< AA >() );
 
-	std::unique_ptr<A> aPtr = AA::GetTypeStatic().Construct();
+	std::unique_ptr<A> aPtr( AA::GetTypeStatic().ConstructTyped() );
 	EXPECT_FALSE( aPtr->IsA< A >() );
 	EXPECT_TRUE( aPtr->IsA< AA >() );
 
@@ -117,20 +117,20 @@ TEST( TestCaseName, InheritsFrom )
 	EXPECT_TRUE( bbb.InheritsFrom< BB >() );
 	EXPECT_TRUE( bbb.InheritsFrom< B >() );
 
-	std::unique_ptr<A> aPtr = AAA::GetTypeStatic().Construct();
+	std::unique_ptr< A > aPtr( AAA::GetTypeStatic().ConstructTyped() );
 	EXPECT_TRUE( aPtr->InheritsFrom< A >() );
 	EXPECT_TRUE( aPtr->InheritsFrom< AA >() );
 
-	aPtr = AA::GetTypeStatic().Construct();
+	aPtr = std::unique_ptr< A >( AA::GetTypeStatic().ConstructTyped() );
 	EXPECT_TRUE( aPtr->InheritsFrom< A >() );
 
 	EXPECT_FALSE( a.InheritsFrom< A >() );
 	EXPECT_FALSE( aa.InheritsFrom< AA >() );
 	EXPECT_FALSE( aaa.InheritsFrom< AAA >() );
 
-	aPtr = AAA::GetTypeStatic().Construct();
+	aPtr = std::unique_ptr< A >( static_cast< AAA* >( AAA::GetTypeStatic().Construct() ) );
 	EXPECT_FALSE( aPtr->InheritsFrom< AAA >() );
-	aPtr = AA::GetTypeStatic().Construct();
+	aPtr = std::unique_ptr< A >( static_cast< AA* >( AA::GetTypeStatic().Construct() ) );
 	EXPECT_FALSE( aPtr->InheritsFrom< AA >() );
 }
 
@@ -173,12 +173,12 @@ TEST( TestCaseName, InheritsFromOrIsA )
 	EXPECT_TRUE( bbb.InheritsFromOrIsA< BB >() );
 	EXPECT_TRUE( bbb.InheritsFromOrIsA< B >() );
 
-	std::unique_ptr<A> aPtr = AAA::GetTypeStatic().Construct();
+	std::unique_ptr< A > aPtr( AAA::GetTypeStatic().ConstructTyped() );
 	EXPECT_TRUE( aPtr->InheritsFromOrIsA< A >() );
 	EXPECT_TRUE( aPtr->InheritsFromOrIsA< AA >() );
 	EXPECT_TRUE( aPtr->InheritsFromOrIsA< AAA >() );
 
-	aPtr = AA::GetTypeStatic().Construct();
+	aPtr = std::unique_ptr< A >( AA::GetTypeStatic().ConstructTyped() );
 	EXPECT_TRUE( aPtr->InheritsFromOrIsA< A >() );
 	EXPECT_TRUE( aPtr->InheritsFromOrIsA< AA >() );
 	EXPECT_FALSE( aPtr->InheritsFromOrIsA< AAA >() );
@@ -187,15 +187,15 @@ TEST( TestCaseName, InheritsFromOrIsA )
 TEST( TestCaseName, Construct )
 {
 	std::unique_ptr<A> aPtr = std::make_unique<AAA>();
-	std::unique_ptr<A> aPtr2 = aPtr->GetType().Construct();
+	std::unique_ptr<A> aPtr2( aPtr->GetType().ConstructTyped() );
 
 	EXPECT_TRUE( aPtr->GetType().IsA< AAA >() );
 	EXPECT_TRUE( aPtr->GetType() == aPtr2->GetType() );
 
 	EXPECT_TRUE( abstract::Abstract::GetTypeStatic().Construct() == nullptr );
 
-	std::unique_ptr< abstract::Abstract > aPtr3 = abc::InheritsFromAbstract::GetTypeStatic().Construct();
-	EXPECT_TRUE( aPtr3->GetType().Construct()->GetType() == abc::InheritsFromAbstract::GetTypeStatic() );
+	std::unique_ptr< abstract::Abstract > aPtr3( abc::InheritsFromAbstract::GetTypeStatic().ConstructTyped() );
+	EXPECT_TRUE( std::unique_ptr< abstract::Abstract >( aPtr3->GetType().ConstructTyped() )->GetType() == abc::InheritsFromAbstract::GetTypeStatic() );
 }
 
 namespace rttiTest
@@ -287,7 +287,7 @@ TEST( TestCaseName, Destroy )
 	{
 		Uint32 triggers = 0u;
 		const Destroyable::Type& type = InheritsFromDestroyable::GetTypeStatic();
-		std::unique_ptr< Destroyable > instance = type.Construct();
+		std::unique_ptr< Destroyable > instance( type.ConstructTyped() );
 		instance->SetFunc( [ & ]() { ++triggers; } );
 
 		EXPECT_EQ( triggers, 0u );

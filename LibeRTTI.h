@@ -836,6 +836,9 @@ namespace rtti
 		virtual void ConstructInPlace( void* dest ) const = 0
 		{}
 
+		virtual void* Construct() const = 0
+		{}
+
 #if RTTI_REQUIRE_MOVE_CTOR
 		virtual void MoveInPlace( void* dest, void* src ) const = 0
 		{}
@@ -1043,9 +1046,13 @@ public: \
 			return KindName ; \
 		} \
 		RTTI_INTERNAL_GET_PARENT_##Inherits##( ParentClassName ) \
-		std::unique_ptr< ClassName > Construct() const \
+		virtual void* Construct() const override \
 		{ \
-			return std::unique_ptr< ClassName >( Construct_Internal() ); \
+			RTTI_INTERNAL_CONSTRUCT_BODY_##Abstract##( ClassName ) ; \
+		} \
+		virtual ClassName##* ConstructTyped() const \
+		{ \
+			RTTI_INTERNAL_CONSTRUCT_BODY_##Abstract##( ClassName ) ; \
 		} \
 		virtual void ConstructInPlace( void* dest ) const override \
 		{ \
@@ -1114,10 +1121,6 @@ public: \
 			} \
 		} \
 	protected: \
-		RTTI_INTERNAL_VIRTUAL_##Virtual ClassName##* Construct_Internal() const \
-		{ \
-			RTTI_INTERNAL_CONSTRUCT_BODY_##Abstract##( ClassName ) \
-		} \
 		Type(); \
 		Type( const char* name ) : ParentClassType ( name ) {} \
 		virtual void OnRegistered() override; \
@@ -1310,6 +1313,16 @@ namespace rtti
 			*static_cast< void** >( dest ) = nullptr;
 		}
 
+		virtual void* Construct() const override
+		{
+			return new void*;
+		}
+
+		void** ConstructTyped() const
+		{
+			return new void*;
+		}
+
 #if RTTI_REQUIRE_MOVE_CTOR
 		virtual void MoveInPlace( void* dest, void* src ) const override
 		{
@@ -1383,6 +1396,16 @@ namespace rtti
 			virtual void ConstructInPlace( void* dest ) const override
 			{
 				new ( dest ) TrueType();
+			}
+
+			virtual void* Construct() const override
+			{
+				return new TrueType;
+			}
+
+			virtual TrueType* ConstructTyped() const
+			{
+				return new TrueType;
 			}
 
 #if RTTI_REQUIRE_MOVE_CTOR
@@ -1628,7 +1651,7 @@ namespace rtti
 			return Count;
 		}
 
-		void ConstructInPlace( void* dest ) const override
+		virtual void ConstructInPlace( void* dest ) const override
 		{
 			using TNonConst = std::remove_const_t< T >;
 			TNonConst* arr = static_cast< TNonConst* >( dest );
@@ -1637,6 +1660,18 @@ namespace rtti
 			{
 				GetInternalTypeDesc().GetType().ConstructInPlace( &arr[ i ] );
 			}
+		}
+
+		virtual void* Construct() const override
+		{
+			void* memory = ::operator new ( GetSize() );
+			ConstructInPlace( memory );
+			return memory;
+		}
+
+		T* ConstructTyped() const
+		{
+			return static_cast< T* >( Construct() );
 		}
 
 #if RTTI_REQUIRE_MOVE_CTOR
@@ -1892,6 +1927,16 @@ namespace rtti
 			new ( dest ) T();
 		}
 
+		virtual void* Construct() const override 
+		{
+			return new T;
+		}
+
+		T* ConstructTyped() const
+		{
+			return new T;
+		}
+
 #if RTTI_REQUIRE_MOVE_CTOR
 		virtual void MoveInPlace( void* dest, void* src ) const
 		{
@@ -2021,6 +2066,11 @@ namespace rtti
 			new ( dest ) T();
 		}
 
+		virtual void* Construct() const
+		{
+			return new T;
+		}
+
 #if RTTI_REQUIRE_MOVE_CTOR
 		virtual void MoveInPlace( void* dest, void* src ) const
 		{
@@ -2076,6 +2126,11 @@ namespace rtti
 			}
 
 			return false;
+		}
+
+		T* ConstructTyped() const
+		{
+			return new T;
 		}
 
 	private:
@@ -2230,6 +2285,13 @@ namespace rtti
 				const auto& type = property.GetType();
 				type.ConstructInPlace( static_cast< uint8_t* >( dest ) + property.GetOffset() );
 			}
+		}
+
+		virtual void* Construct() const override
+		{
+			void* memory = ::operator new ( GetSize() );
+			ConstructInPlace( memory );
+			return memory;
 		}
 
 #if RTTI_REQUIRE_MOVE_CTOR
