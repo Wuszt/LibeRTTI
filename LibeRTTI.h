@@ -842,6 +842,13 @@ namespace rtti
 #if RTTI_REQUIRE_MOVE_CTOR
 		virtual void MoveInPlace( void* dest, void* src ) const = 0
 		{}
+
+		void* ConstructWithMove( void* src ) const
+		{
+			void* memory = ::operator new ( GetSize() );
+			MoveInPlace( memory, src );
+			return memory;
+		}
 #endif
 		virtual void Destroy( void* address ) const = 0
 		{}
