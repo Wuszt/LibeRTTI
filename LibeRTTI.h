@@ -52,6 +52,10 @@
 #define RTTI_CFG_CREATE_STD_UNIQUEPTR_TYPE 1
 #endif
 
+#ifndef RTTI_CFG_CREATE_STD_STRING_TYPE
+#define RTTI_CFG_CREATE_STD_STRING_TYPE 1
+#endif
+
 #pragma region Includes
 #include <vector>
 #include <unordered_map>
@@ -91,6 +95,7 @@ namespace rtti
 	template< class T > class UniquePtrType;
 	template< class T > class RuntimeType;
 	template< class T > class EnumType;
+	class StringType;
 	using ID = uint64;
 
 	namespace internal
@@ -281,6 +286,11 @@ namespace rtti
 #if RTTI_CFG_CREATE_STD_UNIQUEPTR_TYPE
 	template< class T >
 	struct type_of< T, std::enable_if_t< internal::is_uniquePtr< T >::value > > { using type = UniquePtrType< typename T::element_type >; };
+#endif
+
+#if RTTI_CFG_CREATE_STD_STRING_TYPE
+	template< class T >
+	struct type_of< T, std::enable_if_t< std::is_same_v< T, std::string > > > { using type = StringType; };
 #endif
 
 	template< class T >
@@ -782,6 +792,7 @@ namespace rtti
 			Map,
 			RuntimeType,
 			Enum,
+			String
 		};
 
 		Type() = delete;
@@ -2536,4 +2547,71 @@ namespace rtti
 	};
 }
 #endif
+#pragma endregion
+
+#pragma region UniquePtr
+#if RTTI_CFG_CREATE_STD_STRING_TYPE
+namespace rtti
+{
+	class StringType : public Type
+	{
+		friend class ::rtti::RTTI;
+
+	public:
+		virtual ::rtti::Type::Kind GetKind() const override
+		{
+			return ::rtti::Type::Kind::String;
+		}
+
+		virtual const char* GetName() const override 
+		{
+			return "String";
+		}
+
+		virtual void ConstructInPlace( void* dest ) const override
+		{
+			*static_cast< std::string* >( dest ) = std::string();
+		}
+
+		virtual void* Construct() const override
+		{
+			return new std::string();
+		}
+
+		std::string* ConstructTyped() const
+		{
+			return new std::string();
+		}
+
+#if RTTI_REQUIRE_MOVE_CTOR
+		virtual void MoveInPlace( void* dest, void* src ) const override
+		{
+			std::string* srcString = static_cast< std::string* >( src );
+			std::string* destString = static_cast< std::string* >( dest );
+			*destString = std::move( *srcString );
+		}
+#endif
+
+		virtual void Destroy( void* address ) const override
+		{
+			static_cast< std::string* >( address )->~basic_string();
+		}
+
+		virtual size_t GetSize() const override { return sizeof( std::string ); }
+		virtual size_t GetAlignment() const override { return alignof( std::string ); }
+
+		static const StringType& GetInstance()
+		{
+			static const StringType& s_typeInstance = ::rtti::RTTI::GetMutable().GetOrRegisterType< StringType >();
+			return s_typeInstance;
+		}
+
+	private:
+		StringType()
+			: Type( GetName() )
+		{}
+	};
+}
+#endif
+RTTI_INTERNAL_REGISTER_TYPE( ::rtti::StringType );
 #pragma endregion

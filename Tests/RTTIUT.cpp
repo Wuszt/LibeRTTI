@@ -1217,3 +1217,29 @@ TEST( TestCaseName, Enum )
 	testValueFromName( "Zero", rttiTest::TestEnum::Zero );
 	testValueFromName( "MinusTen", rttiTest::TestEnum::MinusTen );
 }
+
+namespace rttiTest
+{
+	struct StructWithStringProperty
+	{
+		RTTI_DECLARE_STRUCT( StructWithStringProperty );
+		std::string m_str = "Hey";
+	};
+}
+
+RTTI_IMPLEMENT_TYPE( StructWithStringProperty,
+	RTTI_REGISTER_PROPERTY( m_str );
+);
+
+TEST( TestCaseName, StringType )
+{
+	const auto& stringType = rtti::GetTypeInstanceOf< std::string >();
+	EXPECT_TRUE( strcmp( stringType.GetName(), "String" ) == 0 );
+
+	StructWithStringProperty myStruct;
+	const auto* propString = rtti::GetTypeInstanceOf< StructWithStringProperty >().FindProperty( "m_str" );
+	EXPECT_TRUE( strcmp( propString->GetValue< std::string >( &myStruct ).c_str(), "Hey" ) == 0 );
+
+	propString->SetValue( &myStruct, std::string( "Hello" ) );
+	EXPECT_TRUE( strcmp( propString->GetValue< std::string >( &myStruct ).c_str(), "Hello" ) == 0 );
+}
