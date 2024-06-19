@@ -2570,7 +2570,7 @@ namespace rtti
 
 		virtual void ConstructInPlace( void* dest ) const override
 		{
-			*static_cast< std::string* >( dest ) = std::string();
+			new ( dest ) std::string();
 		}
 
 		virtual void* Construct() const override
