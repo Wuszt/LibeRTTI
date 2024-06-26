@@ -21,6 +21,7 @@ LibeRTTI is a header only and dependency-free library which provides type data f
 | **Recognizing object's true type** | You can get the true type of your polymorphic class instance. |
 | **Types register** | **LibeRTTI** gives you access to all registered types. |
 | **Properties and Methods** | Types might keep data about the their member variables and methods to make them accessible in runtime. |
+| **Metadata** | Types can store additional string-based metadata.
 | **Unique and persistent IDs** | All registered types and their properties get unique IDs which persist between executions unless the name of the type/property changes. |
 | **Primitive Types** | All primitive types are registered out of the box. |
 | **Enums** | Custom enum classes can also be registered. |
@@ -59,6 +60,8 @@ RTTI_IMPLEMENT_TYPE( MyStruct,
   RTTI_REGISTER_PROPERTY( myPtr );
   RTTI_REGISTER_PROPERTY( myCustomInstance );
   RTTI_REGISTER_METHOD( Foo );
+  RTTI_ADD_METADATA( MyCustomMetadata );
+  RTTI_ADD_METADATA( MyCustomMetadataWithValue, 123 );
 );
 
 static_assert( MyStruct::GetTypeStatic().InheritsFrom< BaseStruct::Type > );
@@ -81,6 +84,16 @@ void Func( void* rawInstance, const rtti::Type& type )
     MyType* fooResult = nullptr;
     float arg = 3.14f;
     myType.FindMethod( "Foo" )->Call( /*instance*/ rawInstance, /*args*/ &arg, /*outcome*/ &fooResult );
+
+    // Accessing metadata
+    if ( myType.HasMetadata( "MyCustomMetadata ) )
+    {
+      // type has provided metadata
+    }
+    if (const std::string* metadataValue = myType.GetMetadataValue( "MyCustomMetadataWithValue" )
+    {
+      *metadataValue == "123 // true
+    }
   }
 }
 ```
@@ -102,7 +115,7 @@ Put one of the following macros into your type's body.
 ### Structs and Classes
 Put the following macro in .cpp file.
 ```cpp
-RTTI_IMPLEMENT_TYPE( <class_name_with_namespace>, <properties_and_methods_registration_macros... (optional)> );
+RTTI_IMPLEMENT_TYPE( <class_name_with_namespace>, <properties/methods/metadata_registration_macros... (optional)> );
 ```
 To register property of your type use:
 ```cpp
@@ -111,6 +124,10 @@ RTTI_REGISTER_PROPERTY( <property_name> );
 For methods use:
 ```cpp
 RTTI_REGISTER_METHOD( <method_name> );
+```
+To add type metadata:
+``` cpp
+RTTI_ADD_METADATA( <key>, <value (optional)> );
 ```
 and put it in `RTTI_IMPLEMENT_TYPE` macro.
 
