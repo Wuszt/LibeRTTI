@@ -1243,3 +1243,45 @@ TEST( TestCaseName, StringType )
 	propString->SetValue( &myStruct, std::string( "Hello" ) );
 	EXPECT_TRUE( strcmp( propString->GetValue< std::string >( &myStruct ).c_str(), "Hello" ) == 0 );
 }
+
+namespace rttiTest
+{
+	struct StructWithMetadata
+	{
+		RTTI_DECLARE_STRUCT( StructWithMetadata );
+	};
+
+	struct InheritedStructWithMetadata : public StructWithMetadata
+	{
+		RTTI_DECLARE_STRUCT( InheritedStructWithMetadata, rttiTest::StructWithMetadata );
+	};
+}
+
+RTTI_IMPLEMENT_TYPE( StructWithMetadata,
+	RTTI_ADD_METADATA( WithoutValue );
+	RTTI_ADD_METADATA( WithValue, 123 );
+);
+
+RTTI_IMPLEMENT_TYPE( InheritedStructWithMetadata,
+	RTTI_ADD_METADATA( WithValue, 321 );
+);
+
+TEST( TestCaseName, TypeMetadata )
+{
+	const auto& type = StructWithMetadata::GetTypeStatic();
+	EXPECT_TRUE( type.HasMetadata( "WithValue" ) );
+	EXPECT_TRUE( type.HasMetadata( "WithoutValue" ) );
+
+	const std::string* value = type.GetMetadataValue( "WithValue" );
+	EXPECT_TRUE( value && *value == "123" );
+	EXPECT_EQ( type.GetMetadataValue( "WithoutValue" ), nullptr );
+}
+
+TEST( TestCaseName, OverridingTypeMetadata )
+{
+	const auto& type = InheritedStructWithMetadata::GetTypeStatic();
+	EXPECT_TRUE( type.HasMetadata( "WithValue" ) );
+
+	const std::string* value = type.GetMetadataValue( "WithValue" );
+	EXPECT_TRUE( value && *value == "321" );
+}

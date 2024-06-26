@@ -924,6 +924,16 @@ namespace rtti
 			return nullptr;
 		}
 
+		virtual bool HasMetadata( const std::string& key ) const
+		{
+			return false;
+		}
+
+		virtual const std::string* GetMetadataValue( const std::string& key ) const
+		{
+			return nullptr;
+		}
+
 	protected:
 		Type( const char* name )
 			: Type( internal::CalcHash( name ) )
@@ -983,7 +993,6 @@ namespace rtti
 			}
 			
 		}
-
 	private:
 		ID m_id = 0u;
 	};
@@ -1138,6 +1147,25 @@ public: \
 				return &m_methods[ index - inheritedMethodsAmount ]; \
 			} \
 		} \
+		virtual bool HasMetadata( const std::string& key ) const override \
+		{ \
+			if ( m_metadata.contains( key ) ) \
+			{ \
+				return true; \
+			} \
+			const auto* parentTypeInstance = ::rtti::internal::TryToGetInstance< ParentClassType >(); \
+			return parentTypeInstance ? parentTypeInstance->HasMetadata( key ) : false; \
+		} \
+		virtual const std::string* GetMetadataValue( const std::string& key ) const override \
+		{ \
+			auto found = m_metadata.find( key ); \
+			if ( found != m_metadata.end() ) \
+			{ \
+				return found->second.empty() ? nullptr : &found->second; \
+			} \
+			const auto* parentTypeInstance = ::rtti::internal::TryToGetInstance< ParentClassType >(); \
+			return parentTypeInstance ? parentTypeInstance->GetMetadataValue( key ) : nullptr; \
+		} \
 	protected: \
 		Type(); \
 		Type( const char* name ) : ParentClassType ( name ) {} \
@@ -1162,8 +1190,16 @@ public: \
 			} \
 			m_methods.emplace_back( std::move( func ) ); \
 		} \
+		void TryToAddMetadata( std::string key, std::string value ) \
+		{ \
+			if ( m_metadata.find( key ) == m_metadata.end() ) \
+			{ \
+				m_metadata.emplace( std::move( key ), std::move( value ) ); \
+			} \
+		} \
 		std::vector< ::rtti::Property > m_properties; \
 		std::vector< ::rtti::Function > m_methods; \
+		std::unordered_map< std::string, std::string > m_metadata; \
 	}; \
 	static const Type& GetTypeStatic() \
 	{ \
@@ -1210,11 +1246,14 @@ RTTI_INTERNAL_DECLARE_TYPE_PARENT( ClassName, ParentClassName, true, Virtual, fa
 
 #define RTTI_INTERNAL_EXPAND( x ) x
 
-#define RTTI_INTERNAL_GET_DECLARE_TYPE_MACRO(_1,_2,NAME,...) NAME
+#define RTTI_INTERNAL_GET_MACRO(_1,_2,NAME,...) NAME
 
-#define RTTI_DECLARE_POLYMORPHIC_CLASS(...) RTTI_INTERNAL_EXPAND(RTTI_INTERNAL_GET_DECLARE_TYPE_MACRO(__VA_ARGS__, RTTI_INTERNAL_DECLARE_TYPE_PARENT_DIRECT, RTTI_INTERNAL_DECLARE_TYPE)(__VA_ARGS__, true, Kind::Class))
+#define RTTI_DECLARE_POLYMORPHIC_CLASS(...) RTTI_INTERNAL_EXPAND(RTTI_INTERNAL_GET_MACRO(__VA_ARGS__, RTTI_INTERNAL_DECLARE_TYPE_PARENT_DIRECT, RTTI_INTERNAL_DECLARE_TYPE)(__VA_ARGS__, true, Kind::Class))
 
-#define RTTI_DECLARE_TYPE_INTERNAL( Kind, ... ) RTTI_INTERNAL_EXPAND(RTTI_INTERNAL_GET_DECLARE_TYPE_MACRO(__VA_ARGS__, RTTI_INTERNAL_DECLARE_TYPE_PARENT_DIRECT, RTTI_INTERNAL_DECLARE_TYPE)( __VA_ARGS__, false, Kind ))
+#define RTTI_DECLARE_POLYMORPHIC_STRUCT(...) RTTI_INTERNAL_EXPAND(RTTI_INTERNAL_GET_MACRO(__VA_ARGS__, RTTI_INTERNAL_DECLARE_TYPE_PARENT_DIRECT, RTTI_INTERNAL_DECLARE_TYPE)(__VA_ARGS__, true, Kind::Struct)) \
+public:
+
+#define RTTI_DECLARE_TYPE_INTERNAL( Kind, ... ) RTTI_INTERNAL_EXPAND(RTTI_INTERNAL_GET_MACRO(__VA_ARGS__, RTTI_INTERNAL_DECLARE_TYPE_PARENT_DIRECT, RTTI_INTERNAL_DECLARE_TYPE)( __VA_ARGS__, false, Kind ))
 
 #define RTTI_DECLARE_CLASS(...) RTTI_DECLARE_TYPE_INTERNAL( Kind::Class, __VA_ARGS__ )
 
@@ -1229,7 +1268,7 @@ public: \
 	using Super = ParentClassName; \
 RTTI_INTERNAL_DECLARE_TYPE_PARENT( ClassName, ParentClassName, true, true, true, Kind ) \
 
-#define RTTI_DECLARE_ABSTRACT_CLASS( ... ) RTTI_INTERNAL_EXPAND( RTTI_INTERNAL_GET_DECLARE_TYPE_MACRO( __VA_ARGS__, RTTI_INTERNAL_DECLARE_ABSTRACT_TYPE_PARENT_DIRECT, RTTI_INTERNAL_DECLARE_ABSTRACT_TYPE )( __VA_ARGS__, Kind::Class ) )
+#define RTTI_DECLARE_ABSTRACT_CLASS( ... ) RTTI_INTERNAL_EXPAND( RTTI_INTERNAL_GET_MACRO( __VA_ARGS__, RTTI_INTERNAL_DECLARE_ABSTRACT_TYPE_PARENT_DIRECT, RTTI_INTERNAL_DECLARE_ABSTRACT_TYPE )( __VA_ARGS__, Kind::Class ) )
 #pragma endregion
 
 #pragma region TypeImplementing
@@ -1260,6 +1299,11 @@ const char* NamespaceClassName##::Type::GetName() const \
 	return #NamespaceClassName; \
 } \
 RTTI_INTERNAL_REGISTER_TYPE( NamespaceClassName##::Type )
+
+#define RTTI_INTERNAL_ADD_METADATA_WITH_VALUE( Key, Value ) TryToAddMetadata( #Key , #Value );
+#define RTTI_INTERNAL_ADD_METADATA( Key ) TryToAddMetadata( #Key , "" );
+
+#define RTTI_ADD_METADATA( ... ) RTTI_INTERNAL_EXPAND(RTTI_INTERNAL_GET_MACRO(__VA_ARGS__, RTTI_INTERNAL_ADD_METADATA_WITH_VALUE, RTTI_INTERNAL_ADD_METADATA)(__VA_ARGS__))
 #pragma endregion
 
 #pragma region PointerType
