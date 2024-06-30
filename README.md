@@ -21,7 +21,7 @@ LibeRTTI is a header only and dependency-free library which provides type data f
 | **Recognizing object's true type** | You can get the true type of your polymorphic class instance. |
 | **Types register** | **LibeRTTI** gives you access to all registered types. |
 | **Properties and Methods** | Types might keep data about the their member variables and methods to make them accessible in runtime. |
-| **Metadata** | Types can store additional string-based metadata.
+| **Metadata** | Types and properties can store additional string-based metadata.
 | **Unique and persistent IDs** | All registered types and their properties get unique IDs which persist between executions unless the name of the type/property changes. |
 | **Primitive Types** | All primitive types are registered out of the box. |
 | **Enums** | Custom enum classes can also be registered. |
@@ -56,7 +56,9 @@ struct MyStruct : public BaseStruct
 // .cpp
 RTTI_IMPLEMENT_TYPE( BaseStruct );
 RTTI_IMPLEMENT_TYPE( MyStruct,
-  RTTI_REGISTER_PROPERTY( myFloat );
+  RTTI_REGISTER_PROPERTY( myFloat,
+    RTTI_ADD_METADATA( MyCustomMetadata, 321 );
+  );
   RTTI_REGISTER_PROPERTY( myPtr );
   RTTI_REGISTER_PROPERTY( myCustomInstance );
   RTTI_REGISTER_METHOD( Foo );
@@ -88,11 +90,15 @@ void Func( void* rawInstance, const rtti::Type& type )
     // Accessing metadata
     if ( myType.HasMetadata( "MyCustomMetadata ) )
     {
-      // type has provided metadata
+      // type contains provided metadata
     }
     if (const std::string* metadataValue = myType.GetMetadataValue( "MyCustomMetadataWithValue" )
     {
       *metadataValue == "123 // true
+    }
+    if( myType.FindProperty( "myFloat" )->HasMetadata( "MyCustomMetadata ") )
+    {
+      // property contains provided metadata
     }
   }
 }
@@ -119,17 +125,17 @@ RTTI_IMPLEMENT_TYPE( <class_name_with_namespace>, <properties/methods/metadata_r
 ```
 To register property of your type use:
 ```cpp
-RTTI_REGISTER_PROPERTY( <property_name> );
+RTTI_REGISTER_PROPERTY( <property_name>, <metadata_macros... (optional)...> );
 ```
 For methods use:
 ```cpp
 RTTI_REGISTER_METHOD( <method_name> );
 ```
-To add type metadata:
+To add type or property metadata:
 ``` cpp
 RTTI_ADD_METADATA( <key>, <value (optional)> );
 ```
-and put it in `RTTI_IMPLEMENT_TYPE` macro.
+and put it in `RTTI_IMPLEMENT_TYPE` (for types) or `RTTI_REGISTER_PROPERTY` (for properties) macro.
 
 ---
 
