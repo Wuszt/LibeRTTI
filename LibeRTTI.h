@@ -566,6 +566,30 @@ namespace rtti
 			return m_instanceFlags;
 		}
 
+		bool HasMetadata( const std::string& key ) const
+		{
+			return m_metadata.contains( key );
+		}
+
+		const std::string* GetMetadataValue( const std::string& key ) const
+		{
+			auto found = m_metadata.find( key );
+			if ( found != m_metadata.end() )
+			{
+				return found->second.empty() ? nullptr : &found->second;
+			}
+				
+			return nullptr;
+		}
+
+		void TryToAddMetadata( std::string key, std::string value )
+		{
+			if ( m_metadata.find( key ) == m_metadata.end() )
+			{
+				m_metadata.emplace( std::move( key ), std::move( value ) );
+			}
+		}
+
 	private:
 		Property( const char* name, size_t offset, const Type& type, InstanceFlags flags )
 			: m_name( name )
@@ -580,10 +604,19 @@ namespace rtti
 		size_t m_offset = 0u;
 		const Type& m_type;
 		InstanceFlags m_instanceFlags = InstanceFlags::None;
+		std::unordered_map< std::string, std::string > m_metadata;
 	};
 }
 
-#define RTTI_REGISTER_PROPERTY( PropertyName ) TryToAddProperty( CreateProperty< decltype( CurrentlyImplementedType::##PropertyName ) >( #PropertyName, offsetof( CurrentlyImplementedType, PropertyName ) ) );
+#define RTTI_REGISTER_PROPERTY( PropertyName, ... ) TryToAddProperty( CreateProperty< decltype( CurrentlyImplementedType::##PropertyName ) >( #PropertyName, offsetof( CurrentlyImplementedType, PropertyName ), \
+ []( ::rtti::Property& prop ) \
+	{ \
+		auto TryToAddMetadata = [&]( const std::string& key, const std::string& value ) \
+		{ \
+			prop.TryToAddMetadata( key, value ); \
+		}; \
+		__VA_ARGS__ \
+	} ) );
 #pragma endregion
 
 #pragma region InternalTypeDesc
@@ -950,12 +983,20 @@ namespace rtti
 			return ::rtti::Property( name, offset, type, flags );
 		}
 
-		template< class T >
-		static ::rtti::Property CreateProperty( const char* name, size_t offset )
+		template< class TInitFunc >
+		static ::rtti::Property CreateProperty( const char* name, size_t offset, const Type& type, InstanceFlags flags, TInitFunc initFunc )
+		{
+			auto property = CreateProperty( name, offset, type, flags );
+			initFunc( property );
+			return property;
+		}
+
+		template< class T, class TInitFunc >
+		static ::rtti::Property CreateProperty( const char* name, size_t offset, TInitFunc initFunc )
 		{
 			static_assert( !std::is_reference_v< T >, "Reference properties are not supported!" );
 			static_assert( !std::is_const_v< T >, "Const properties are not supported!" );
-			return CreateProperty( name, offset, GetTypeInstanceOf< T >(), GetInstanceFlags< T >() );
+			return CreateProperty( name, offset, GetTypeInstanceOf< T >(), GetInstanceFlags< T >(), std::move( initFunc ) );
 		}
 
 		template< class T >

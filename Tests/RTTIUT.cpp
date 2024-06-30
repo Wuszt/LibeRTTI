@@ -1285,3 +1285,44 @@ TEST( TestCaseName, OverridingTypeMetadata )
 	const std::string* value = type.GetMetadataValue( "WithValue" );
 	EXPECT_TRUE( value && *value == "321" );
 }
+
+namespace rttiTest
+{
+	struct StructPropertiesWithMetadata
+	{
+		RTTI_DECLARE_STRUCT( StructPropertiesWithMetadata );
+		Int32 m_prop = 0;
+		Bool m_boolean = false;
+	};
+}
+
+RTTI_IMPLEMENT_TYPE( rttiTest::StructPropertiesWithMetadata,
+	RTTI_REGISTER_PROPERTY( m_prop, 
+		RTTI_ADD_METADATA( WithoutValue );
+		RTTI_ADD_METADATA( WithValue, 123 );
+	);
+	RTTI_REGISTER_PROPERTY( m_boolean,
+		RTTI_ADD_METADATA( WithValue, 321 );
+	);
+);
+
+TEST( TestCaseName, PropertyMetadata )
+{
+	const auto& type = StructPropertiesWithMetadata::GetTypeStatic();
+	EXPECT_TRUE( type.FindProperty( "m_prop" )->HasMetadata( "WithValue" ) );
+	EXPECT_TRUE( type.FindProperty( "m_prop" )->HasMetadata( "WithoutValue" ) );
+	EXPECT_FALSE( type.FindProperty( "m_boolean" )->HasMetadata( "WithoutValue" ) );
+	EXPECT_TRUE( type.FindProperty( "m_boolean" )->HasMetadata( "WithValue" ) );
+
+	{
+		const std::string* value = type.FindProperty( "m_prop" )->GetMetadataValue( "WithValue" );
+		EXPECT_TRUE( value && *value == "123" );
+	}
+	EXPECT_EQ( type.FindProperty( "m_prop" )->GetMetadataValue( "WithoutValue" ), nullptr );
+
+	{
+		const std::string* value = type.FindProperty( "m_boolean" )->GetMetadataValue( "WithValue" );
+		EXPECT_TRUE( value && *value == "321" );
+	}
+	EXPECT_EQ( type.FindProperty( "m_boolean" )->GetMetadataValue( "WithoutValue" ), nullptr );
+}
