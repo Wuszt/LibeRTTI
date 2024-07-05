@@ -1259,6 +1259,7 @@ namespace rttiTest
 
 RTTI_IMPLEMENT_TYPE( StructWithMetadata,
 	RTTI_ADD_METADATA( WithoutValue );
+	RTTI_ADD_METADATA( "WithQuatations" );
 	RTTI_ADD_METADATA( WithValue, 123 );
 );
 
@@ -1270,6 +1271,7 @@ TEST( TestCaseName, TypeMetadata )
 {
 	const auto& type = StructWithMetadata::GetTypeStatic();
 	EXPECT_TRUE( type.HasMetadata( "WithValue" ) );
+	EXPECT_TRUE( type.HasMetadata( "WithQuatations" ) );
 	EXPECT_TRUE( type.HasMetadata( "WithoutValue" ) );
 
 	const std::string* value = type.GetMetadataValue( "WithValue" );

@@ -335,6 +335,11 @@ namespace rtti
 			static constexpr bool value = sizeof( Test<T>( 0 ) ) == sizeof( yes );
 		};
 
+		static constexpr std::pair< size_t, size_t > GetStringStartAndSizeWithoutQuotations( const char* c, size_t size )
+		{
+			return { c[ 0 ] == '\"' ? 1 : 0, c[ size - 2 ] == '\"' ? size - 3 : size - 1 };
+		}
+
 		template< class T >
 		static const rtti::Type* TryToGetTypeInstance()
 		{
@@ -611,7 +616,7 @@ namespace rtti
 #define RTTI_REGISTER_PROPERTY( PropertyName, ... ) TryToAddProperty( CreateProperty< decltype( CurrentlyImplementedType::##PropertyName ) >( #PropertyName, offsetof( CurrentlyImplementedType, PropertyName ), \
  []( ::rtti::Property& prop ) \
 	{ \
-		auto TryToAddMetadata = [&]( const std::string& key, const std::string& value ) \
+		auto TryToAddMetadata = [ & ]( const std::string& key, const std::string& value ) \
 		{ \
 			prop.TryToAddMetadata( key, value ); \
 		}; \
@@ -1341,8 +1346,12 @@ const char* NamespaceClassName##::Type::GetName() const \
 } \
 RTTI_INTERNAL_REGISTER_TYPE( NamespaceClassName##::Type )
 
-#define RTTI_INTERNAL_ADD_METADATA_WITH_VALUE( Key, Value ) TryToAddMetadata( #Key , #Value );
-#define RTTI_INTERNAL_ADD_METADATA( Key ) TryToAddMetadata( #Key , "" );
+#define RTTI_INTERNAL_ADD_METADATA_WITH_VALUE( Key, Value ) \
+{ constexpr auto key = ::rtti::internal::GetStringStartAndSizeWithoutQuotations( #Key, sizeof( #Key ) ); \
+  constexpr auto value = ::rtti::internal::GetStringStartAndSizeWithoutQuotations( #Value, sizeof( #Value ) ); \
+  TryToAddMetadata( std::string( #Key + key.first, key.second ) , std::string( #Value + value.first, value.second ) ); }
+#define RTTI_INTERNAL_ADD_METADATA( Key ) \
+ { constexpr auto key = ::rtti::internal::GetStringStartAndSizeWithoutQuotations( #Key, sizeof( #Key ) ); TryToAddMetadata( std::string( #Key + key.first, key.second ) , "" ); }
 
 #define RTTI_ADD_METADATA( ... ) RTTI_INTERNAL_EXPAND(RTTI_INTERNAL_GET_MACRO(__VA_ARGS__, RTTI_INTERNAL_ADD_METADATA_WITH_VALUE, RTTI_INTERNAL_ADD_METADATA)(__VA_ARGS__))
 #pragma endregion
