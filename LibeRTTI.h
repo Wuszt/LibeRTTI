@@ -241,16 +241,13 @@ namespace rtti
 	}
 
 	template< class T, class T2 = void >
-	struct type_of {};
+	struct type_of { using type = T::Type; };
 
 	template< class T >
 	struct type_of< T, std::enable_if_t< std::is_same_v< T, void > > >{ using type = Type; };
 
 	template< class T >
 	struct type_of< T, std::enable_if_t< std::is_enum_v< T > > > { using type = EnumType< std::remove_cvref_t< T > >; };
-
-	template< class T >
-	struct type_of< T, std::enable_if_t< std::is_class_v< T > && !internal::is_template< T >::value && !internal::is_array< T >::value > > { using type = typename T::Type; };
 
 	template< class T >
 	struct type_of< T, std::enable_if_t< std::is_fundamental_v< T > && !std::is_same_v< T, void >  > > { using type = PrimitiveType< std::remove_cvref_t< T > >; };
