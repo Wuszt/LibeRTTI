@@ -1045,6 +1045,66 @@ namespace rtti
 }
 #pragma endregion
 
+#pragma region CustomTypeClass
+namespace rtti
+{
+	template< class T, rtti::Type::Kind TKind = Type::Kind::Class >
+	class CustomType : public Type
+	{
+		friend class ::rtti::RTTI;
+
+	public:
+		Kind GetKind() const override
+		{
+			return TKind;
+		}
+
+		void ConstructInPlace( void* dest ) const override
+		{
+			new ( dest ) T();
+		}
+
+		void* Construct() const override
+		{
+			return new T();
+		}
+
+#if RTTI_REQUIRE_MOVE_CTOR
+		virtual void MoveInPlace( void* dest, void* src ) const override
+		{
+			new ( dest ) T( std::move( *static_cast< T* >( src ) ) );
+		}
+#endif
+
+		void Destroy( void* address ) const override
+		{
+			static_cast< T* >( address )->~T();
+		}
+
+		size_t GetSize() const override
+		{
+			return sizeof( T );
+		}
+
+		size_t GetAlignment() const override
+		{
+			return alignof( T );
+		}
+
+		static const type_of< T >::type& GetInstance()
+		{
+			static const type_of< T >::type& s_typeInstance = ::rtti::RTTI::GetMutable().GetOrRegisterType< type_of< T >::type >();
+			return s_typeInstance;
+		}
+
+	protected:
+		CustomType( const char* name )
+			: rtti::Type( name )
+		{}
+	};
+}
+#pragma endregion
+
 #pragma region InternalTypeDescImpl
 namespace rtti
 {
