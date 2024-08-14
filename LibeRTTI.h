@@ -1045,23 +1045,23 @@ namespace rtti
 #pragma region CustomTypeClass
 namespace rtti
 {
-	template< class T, rtti::Type::Kind TKind = Type::Kind::Class >
-	class CustomType : public Type
+	template< class T, class TParentType = ::rtti::Type, rtti::Type::Kind TKind = Type::Kind::Class >
+	class CustomType : public TParentType
 	{
 		friend class ::rtti::RTTI;
 
 	public:
-		Kind GetKind() const override
+		virtual ::rtti::Type::Kind GetKind() const override
 		{
 			return TKind;
 		}
 
-		void ConstructInPlace( void* dest ) const override
+		virtual void ConstructInPlace( void* dest ) const override
 		{
 			new ( dest ) T();
 		}
 
-		void* Construct() const override
+		virtual void* Construct() const override
 		{
 			return new T();
 		}
@@ -1073,19 +1073,24 @@ namespace rtti
 		}
 #endif
 
-		void Destroy( void* address ) const override
+		virtual void Destroy( void* address ) const override
 		{
 			static_cast< T* >( address )->~T();
 		}
 
-		size_t GetSize() const override
+		virtual size_t GetSize() const override
 		{
 			return sizeof( T );
 		}
 
-		size_t GetAlignment() const override
+		virtual size_t GetAlignment() const override
 		{
 			return alignof( T );
+		}
+
+		virtual const ::rtti::Type* GetParent() const override
+		{
+			return ::rtti::internal::TryToGetInstance< TParentType >();
 		}
 
 		static const type_of< T >::type& GetInstance()
@@ -1096,7 +1101,7 @@ namespace rtti
 
 	protected:
 		CustomType( const char* name )
-			: rtti::Type( name )
+			: TParentType( name )
 		{}
 	};
 }
