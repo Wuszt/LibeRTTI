@@ -592,12 +592,18 @@ namespace rtti
 			}
 		}
 
+		size_t GetContainerIndex() const
+		{
+			return m_containerIndex;
+		}
+
 	private:
-		Property( const char* name, size_t offset, const Type& type, InstanceFlags flags )
+		Property( const char* name, size_t containerIndex, size_t offset, const Type& type, InstanceFlags flags )
 			: m_name( name )
 			, m_id( internal::CalcHash( name ) )
 			, m_offset( offset )
 			, m_type( type )
+			, m_containerIndex( containerIndex )
 			, m_instanceFlags( flags )
 		{}
 
@@ -605,12 +611,13 @@ namespace rtti
 		ID m_id = 0u;
 		size_t m_offset = 0u;
 		const Type& m_type;
+		size_t m_containerIndex = static_cast< size_t >( -1 );
 		InstanceFlags m_instanceFlags = InstanceFlags::None;
 		std::unordered_map< std::string, std::string > m_metadata;
 	};
 }
 
-#define RTTI_REGISTER_PROPERTY( PropertyName, ... ) TryToAddProperty( CreateProperty< decltype( CurrentlyImplementedType::##PropertyName ) >( #PropertyName, offsetof( CurrentlyImplementedType, PropertyName ), \
+#define RTTI_REGISTER_PROPERTY( PropertyName, ... ) TryToAddProperty( CreateProperty< decltype( CurrentlyImplementedType::##PropertyName ) >( #PropertyName, static_cast< size_t >( -1 ), offsetof( CurrentlyImplementedType, PropertyName ), \
  []( ::rtti::Property& prop ) \
 	{ \
 		auto TryToAddMetadata = [ & ]( const std::string& key, const std::string& value ) \
@@ -980,31 +987,31 @@ namespace rtti
 
 		virtual void OnRegistered() {}
 
-		static ::rtti::Property CreateProperty( const char* name, size_t offset, const Type& type, InstanceFlags flags )
+		static ::rtti::Property CreateProperty( const char* name, size_t containerIndex, size_t offset, const Type& type, InstanceFlags flags )
 		{
-			return ::rtti::Property( name, offset, type, flags );
+			return ::rtti::Property( name, containerIndex, offset, type, flags );
 		}
 
 		template< class TInitFunc >
-		static ::rtti::Property CreateProperty( const char* name, size_t offset, const Type& type, InstanceFlags flags, TInitFunc initFunc )
+		static ::rtti::Property CreateProperty( const char* name, size_t containerIndex, size_t offset, const Type& type, InstanceFlags flags, TInitFunc initFunc )
 		{
-			auto property = CreateProperty( name, offset, type, flags );
+			auto property = CreateProperty( name, containerIndex, offset, type, flags );
 			initFunc( property );
 			return property;
 		}
 
 		template< class T, class TInitFunc >
-		static ::rtti::Property CreateProperty( const char* name, size_t offset, TInitFunc initFunc )
+		static ::rtti::Property CreateProperty( const char* name, size_t containerIndex, size_t offset, TInitFunc initFunc )
 		{
 			static_assert( !std::is_reference_v< T >, "Reference properties are not supported!" );
 			static_assert( !std::is_const_v< T >, "Const properties are not supported!" );
-			return CreateProperty( name, offset, GetTypeInstanceOf< T >(), GetInstanceFlags< T >(), std::move( initFunc ) );
+			return CreateProperty( name, containerIndex, offset, GetTypeInstanceOf< T >(), GetInstanceFlags< T >(), std::move( initFunc ) );
 		}
 
 		template< class T >
-		static ::rtti::Property CreateInternalProperty( const char* name, size_t offset )
+		static ::rtti::Property CreateInternalProperty( const char* name, size_t containerIndex, size_t offset )
 		{
-			return CreateProperty( name, offset, GetTypeInstanceOf< T >(), GetInstanceFlags< T >() );
+			return CreateProperty( name, containerIndex, offset, GetTypeInstanceOf< T >(), GetInstanceFlags< T >() );
 		}
 
 		template< class TFunc >
@@ -1728,7 +1735,7 @@ namespace rtti
 		virtual void EmplaceElement( void* containerAddress, void* elementAddress ) const = 0;
 		virtual void AddDefaultElement( void* containerAddress ) const = 0;
 		virtual void Clear( void* containerAddress ) const = 0;
-		virtual void RemoveElementAtIndex( void* containerAddress, uint32_t index ) const = 0;
+		virtual void RemoveElementAtIndex( void* containerAddress, size_t index ) const = 0;
 
 	protected:
 		using ContainerType::ContainerType;
@@ -1758,13 +1765,15 @@ namespace rtti
 				for ( const auto& element : *static_cast< const TrueType* >( containerAddress ) )
 				{
 					std::string name = "[";
-					name += std::to_string( i++ );
+					name += std::to_string( i );
 					name += "]";
-					auto visitOutcome = visitFunc( Type::CreateProperty( name.c_str(), reinterpret_cast< const uint8_t* >( &element ) - reinterpret_cast< const uint8_t* >( containerAddress ), GetInternalTypeDesc().GetType(), GetInternalTypeDesc().GetFlags() ) );
+					auto visitOutcome = visitFunc( Type::CreateProperty( name.c_str(), i, reinterpret_cast< const uint8_t* >( &element ) - reinterpret_cast< const uint8_t* >( containerAddress ), GetInternalTypeDesc().GetType(), GetInternalTypeDesc().GetFlags() ) );
 					if ( visitOutcome == VisitOutcome::Break )
 					{
 						break;
 					}
+					
+					++i;
 				}
 			}
 
@@ -1890,7 +1899,7 @@ namespace rtti
 				std::string name = "[";
 				name += std::to_string( i );
 				name += "]";
-				auto visitOutcome = visitFunc( Type::CreateProperty( name.c_str(), i * GetInternalTypeDesc().GetType().GetSize(), GetInternalTypeDesc().GetType(), GetInternalTypeDesc().GetFlags() ) );
+				auto visitOutcome = visitFunc( Type::CreateProperty( name.c_str(), i, i * GetInternalTypeDesc().GetType().GetSize(), GetInternalTypeDesc().GetType(), GetInternalTypeDesc().GetFlags() ) );
 				if ( visitOutcome == VisitOutcome::Break )
 				{
 					break;
@@ -1954,7 +1963,7 @@ namespace rtti
 			static_cast< std::vector< T >* >( containerAddress )->clear();
 		}
 
-		virtual void RemoveElementAtIndex( void* containerAddress, uint32_t index ) const override
+		virtual void RemoveElementAtIndex( void* containerAddress, size_t index ) const override
 		{
 			std::vector< T >* vector = static_cast< std::vector< T >* >( containerAddress );
 			vector->erase( vector->begin() + index );
@@ -2004,10 +2013,10 @@ namespace rtti
 			static_cast< std::unordered_set< T >* >( containerAddress )->clear();
 		}
 
-		virtual void RemoveElementAtIndex( void* containerAddress, uint32_t index ) const override
+		virtual void RemoveElementAtIndex( void* containerAddress, size_t index ) const override
 		{
 			std::unordered_set< T >* set = static_cast< std::unordered_set< T >* >( containerAddress );
-			uint32_t i = 0u;
+			size_t i = 0u;
 			for ( auto it = set->begin(); it != set->end(); ++it )
 			{
 				if ( i++ == index )
@@ -2063,10 +2072,10 @@ namespace rtti
 			static_cast< std::unordered_map< TKey, TValue >* >( containerAddress )->clear();
 		}
 
-		virtual void RemoveElementAtIndex( void* containerAddress, uint32_t index ) const override
+		virtual void RemoveElementAtIndex( void* containerAddress, size_t index ) const override
 		{
 			std::unordered_map< TKey, TValue >* map = static_cast< std::unordered_map< TKey, TValue >* >( containerAddress );
-			uint32_t i = 0u;
+			size_t i = 0u;
 			for ( auto it = map->begin(); it != map->end(); ++it )
 			{
 				if ( i++ == index )
@@ -2425,7 +2434,7 @@ namespace rtti
 				currentOffset = ( ( currentOffset + ( type.GetAlignment() - 1u ) ) & ~( type.GetAlignment() - 1u ) );
 			}
 
-			m_properties.emplace_back( ::rtti::Type::CreateProperty( name, currentOffset, type, flags ) );
+			m_properties.emplace_back( ::rtti::Type::CreateProperty( name, static_cast< size_t >( -1 ), currentOffset, type, flags ) );
 			m_size = currentOffset - parentSize + type.GetSize();
 			m_alignment = std::max( m_alignment, type.GetAlignment() );
 			return m_properties.back();
