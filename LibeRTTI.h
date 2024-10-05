@@ -1693,8 +1693,8 @@ namespace rtti
 			PairType()
 			{
 				using TrueType = std::pair< T1, T2 >;
-				m_properties.emplace_back( Type::CreateInternalProperty< T1 >( "First", offsetof( TrueType, first ) ) );
-				m_properties.emplace_back( Type::CreateInternalProperty< T2 >( "Second", offsetof( TrueType, second ) ) );
+				m_properties.emplace_back( Type::CreateInternalProperty< T1 >( "First", static_cast< size_t >( -1 ), offsetof( TrueType, first ) ) );
+				m_properties.emplace_back( Type::CreateInternalProperty< T2 >( "Second", static_cast< size_t >( -1 ), offsetof( TrueType, second ) ) );
 			}
 
 			static std::array< InternalTypeDesc, 2 > GetInternalTypeDescsStatic()
