@@ -846,6 +846,11 @@ namespace rtti
 		virtual ~Type() = default;
 		virtual const char* GetName() const = 0;
 
+		virtual const Type& GetTrueType( const void* address ) const
+		{
+			return *this;
+		}
+
 		template< class T >
 		bool IsA() const
 		{
@@ -861,6 +866,12 @@ namespace rtti
 		bool InheritsFrom() const
 		{
 			return InheritsFrom( T::GetTypeStatic() );
+		}
+
+		template< class T >
+		bool InheritsFromOrIsA() const
+		{
+			return IsA< T >() || InheritsFrom< T >();
 		}
 
 		template< class T >
@@ -1220,6 +1231,10 @@ public: \
 		virtual size_t GetAlignment() const override \
 		{ \
 			return alignof( ClassName ); \
+		} \
+		virtual const Type& GetTrueType( const void* address ) const \
+		{ \
+			return static_cast< const ClassName * >( address )->GetType(); \
 		} \
 		static const Type& GetInstance() \
 		{ \
