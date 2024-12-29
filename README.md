@@ -19,6 +19,7 @@ LibeRTTI is a header only and dependency-free library which provides type data f
 | **Instantiating/Destroying/Copying without knowing true type** | Type classes are able to instantiate, destroy or copy raw memory which contains the types they represent. |
 | **Move without knowing true type (Optional)** | Same as above but with the move operation. It forces all registered types to be movable. It might be disabled by defining `RTTI_REQUIRE_MOVE_CTOR 0` before including the **LibeRTTI** header. |
 | **Recognizing object's true type** | You can get the true type of your polymorphic class instance. |
+| **Casts** | Functions that allow to cast between related types. |
 | **Types register** | **LibeRTTI** gives you access to all registered types. |
 | **Properties and Methods** | Types might keep data about the their member variables and methods to make them accessible in runtime. |
 | **Metadata** | Types and properties can store additional string-based metadata.
