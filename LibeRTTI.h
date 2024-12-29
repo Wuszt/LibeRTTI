@@ -2795,3 +2795,86 @@ namespace rtti
 #endif
 RTTI_INTERNAL_REGISTER_TYPE( ::rtti::StringType );
 #pragma endregion
+
+#pragma region Casts
+namespace rtti
+{
+	template< class TDest, class TSource >
+	TDest* Cast( TSource* source )
+	{
+		if ( TDest::GetTypeStatic().InheritsFromOrIsA< TSource >() )
+		{
+			return static_cast< TDest* >( source );
+		}
+
+		return nullptr;
+	}
+
+	template< class TDest, class TSource >
+	const TDest* Cast( const TSource* source )
+	{
+		if ( TDest::GetTypeStatic().InheritsFromOrIsA< TSource >() )
+		{
+			return static_cast< const TDest* >( source );
+		}
+
+		return nullptr;
+	}
+
+	template< class TDest, class TSource >
+	TDest* Cast( TSource& source )
+	{
+		return Cast< TDest >( &source );
+	}
+
+	template< class TDest, class TSource >
+	const TDest* Cast( const TSource& source )
+	{
+		return Cast< const TDest >( &source );
+	}
+
+	template< class TDest, class TSource >
+	TDest& CastChecked( TSource* source )
+	{
+		if ( TDest* dest = Cast< TDest >( source ) )
+		{
+			return *dest;
+		}
+
+		throw;
+	}
+
+	template< class TDest, class TSource >
+	const TDest& CastChecked( const TSource* source )
+	{
+		if ( const TDest* dest = Cast< TDest >( source ) )
+		{
+			return *dest;
+		}
+
+		throw;
+	}
+
+	template< class TDest, class TSource >
+	TDest& CastChecked( TSource& source )
+	{
+		if ( TDest* dest = Cast< TDest >( source ) )
+		{
+			return *dest;
+		}
+
+		throw;
+	}
+
+	template< class TDest, class TSource >
+	const TDest& CastChecked( const TSource& source )
+	{
+		if ( const TDest* dest = Cast< TDest >( source ) )
+		{
+			return *dest;
+		}
+
+		throw;
+	}
+}
+#pragma endregion
