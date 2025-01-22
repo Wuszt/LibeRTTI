@@ -682,13 +682,13 @@ namespace rtti
 			static constexpr int ArgsAmount = sizeof...( TArgs );
 
 			template< size_t Index = 0u, class... Args >
-			static std::enable_if_t< Index != ArgsAmount, void > Call( R( TObj::* func )( TArgs... ), void* obj, void* args, void* returnVal, Args... pack )
+			static std::enable_if_t< Index != ArgsAmount, void > Call( R( TObj::* func )( TArgs... ), void* obj, void* args, void* returnVal, Args&&... pack )
 			{
 				using T = typename get_type_from_pack< Index, TArgs... >::type;
 				uint8_t* argAddress = reinterpret_cast< uint8_t* >( args );
 				const size_t offset = ( alignof( T ) - ( reinterpret_cast< size_t >( argAddress ) & ( alignof( T ) - 1 ) ) ) & ( alignof( T ) - 1 );
 				argAddress = argAddress + offset;
-				Call< Index + 1 >( func, obj, reinterpret_cast< void* >( argAddress + sizeof( T ) ), returnVal, pack..., *reinterpret_cast< std::remove_reference_t< T >* >( argAddress ) );
+				Call< Index + 1 >( func, obj, reinterpret_cast< void* >( argAddress + sizeof( T ) ), returnVal, std::forward< Args >( pack )..., *reinterpret_cast< std::remove_reference_t< T >* >( argAddress ) );
 			}
 
 			template< size_t Index = 0u, class... Args >
